@@ -1,0 +1,76 @@
+import type { PlacedItem, Scenario } from '../types';
+
+interface ValidationOverlayProps {
+  scenario: Scenario;
+  placedAccessories: PlacedItem[];
+  validChains: string[][];
+  invalidChains: string[][];
+  disconnectedItems: string[];
+}
+
+export default function ValidationOverlay({
+  scenario,
+  placedAccessories,
+  validChains,
+  invalidChains,
+  disconnectedItems,
+}: ValidationOverlayProps) {
+  // Combine all items for rendering
+  const allItems = [
+    ...scenario.outlets,
+    ...scenario.equipment,
+    ...placedAccessories,
+  ];
+
+  // Determine which items should glow what color
+  const getItemGlowClass = (itemId: string): string | null => {
+    // Check if in valid chain (green)
+    const isValid = validChains.some(chain => chain.includes(itemId));
+    if (isValid) {
+      return 'validation-glow-green';
+    }
+
+    // Check if in invalid chain (red)
+    const isInvalid = invalidChains.some(chain => chain.includes(itemId));
+    if (isInvalid) {
+      return 'validation-glow-red';
+    }
+
+    // Check if disconnected (red)
+    if (disconnectedItems.includes(itemId)) {
+      return 'validation-glow-red';
+    }
+
+    return null;
+  };
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-30">
+      {/* Top padding for camera notch */}
+      <div className="h-[80px]" />
+      
+      {/* Canvas area - matches GameCanvas dimensions */}
+      <div className="relative w-full h-[calc(100%-230px)]">
+        {allItems.map((item) => {
+          const glowClass = getItemGlowClass(item.id);
+          
+          if (!glowClass) return null;
+
+          return (
+            <div
+              key={`glow-${item.id}`}
+              className={`absolute ${glowClass}`}
+              style={{
+                left: `${item.x}px`,
+                top: `${item.y}px`,
+                transform: 'translate(-50%, -50%)',
+                width: '120px',
+                height: '120px',
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
