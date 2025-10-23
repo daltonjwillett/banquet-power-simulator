@@ -13,7 +13,7 @@ const CANVAS_WIDTH = 1080;
 const BOUNDARY_PADDING = {
   left: 80,   // Left edge for outlets
   right: 80,  // Right edge for outlets
-  top: 200,   // Top padding - avoid status bar (80px notch + 100px status bar + 20px buffer)
+  top: 240,   // Top padding - avoid status bar (80px notch + 100px status bar + 20px buffer)
   bottom: 200, // Bottom padding - avoid toolbar (150px toolbar + 50px buffer)
 };
 
@@ -51,7 +51,7 @@ function gridToPixel(col: number, row: number): { x: number; y: number } {
 // - Pizza Oven
 // These should be positioned near tables but as separate locked items
 
-const EQUIPMENT_X_OFFSET = 120; // Offset equipment 120px to the right for better visual balance
+const EQUIPMENT_X_OFFSET = 160; // Offset equipment 120px to the right for better visual balance
 const EQUIPMENT_Y_OFFSET = 20;
 
 function placeEquipmentOnTable(
@@ -66,32 +66,32 @@ function placeEquipmentOnTable(
   let dynamicOffset = EQUIPMENT_X_OFFSET; // default 120px for 1-3 items
 
   if (count >= 6) {
-    dynamicOffset = 200;
+    dynamicOffset = 300;
   } else if (count === 5) {
-    dynamicOffset = 180;
+    dynamicOffset = 240;
   } else if (count === 4) {
-    dynamicOffset = 150;
+    dynamicOffset = 170;
   }
   
   if (count === 0) return items;
   
   if (count === 1) {
-    // Single item - center it on the table
+    // Single item - center it on the table with good offset
     items.push({
       id: `equipment${startId}`,
       itemType: equipmentTypes[0],
-      x: table.x + dynamicOffset, // Apply offset
-      y: table.y + EQUIPMENT_Y_OFFSET, // Table center y
+      x: table.x + (dynamicOffset * 0.9), // Increased from 0.8x to 0.9x
+      y: table.y + EQUIPMENT_Y_OFFSET,
       locked: true,
     });
   } else if (count === 2) {
-    // Two items - space them evenly
-    const gap = table.width / 3;
+    // Two items - space them evenly with good offset
+    const gap = table.width / 2.2; // Increased from /2.5 to /2.2 for better spacing
     
     items.push({
       id: `equipment${startId}`,
       itemType: equipmentTypes[0],
-      x: table.x - gap / 2 + dynamicOffset, // Left of center + offset
+      x: table.x - gap / 2 + (dynamicOffset * 0.85), // Increased from 0.7x to 0.85x
       y: table.y + EQUIPMENT_Y_OFFSET,
       locked: true,
     });
@@ -99,18 +99,18 @@ function placeEquipmentOnTable(
     items.push({
       id: `equipment${startId + 1}`,
       itemType: equipmentTypes[1],
-      x: table.x + gap / 2 + dynamicOffset, // Right of center + offset
+      x: table.x + gap / 2 + (dynamicOffset * 0.85), // Increased from 0.7x to 0.85x
       y: table.y + EQUIPMENT_Y_OFFSET,
       locked: true,
     });
   } else if (count === 3) {
-    // Three items - distribute evenly
-    const spacing = table.width / 4;
+    // Three items - distribute evenly with good spacing
+    const spacing = table.width / 3.2; // Increased from /3.5 to /3.2 for better spacing
     
     items.push({
       id: `equipment${startId}`,
       itemType: equipmentTypes[0],
-      x: table.x - spacing + dynamicOffset, // Left + offset
+      x: table.x - spacing + (dynamicOffset * 0.75), // Increased from 0.6x to 0.75x
       y: table.y + EQUIPMENT_Y_OFFSET,
       locked: true,
     });
@@ -118,7 +118,7 @@ function placeEquipmentOnTable(
     items.push({
       id: `equipment${startId + 1}`,
       itemType: equipmentTypes[1],
-      x: table.x + dynamicOffset, // Center + offset
+      x: table.x + (dynamicOffset * 0.75), // Increased from 0.6x to 0.75x
       y: table.y + EQUIPMENT_Y_OFFSET,
       locked: true,
     });
@@ -126,20 +126,20 @@ function placeEquipmentOnTable(
     items.push({
       id: `equipment${startId + 2}`,
       itemType: equipmentTypes[2],
-      x: table.x + spacing + dynamicOffset, // Right + offset
+      x: table.x + spacing + (dynamicOffset * 1.15), // Increased from 0.6x to 0.75x
       y: table.y + EQUIPMENT_Y_OFFSET,
       locked: true,
     });
   } else {
-    // Four or more items
-    // Distribute evenly across table width
-    const totalWidth = table.width;
+    // Four or more items - distribute evenly with balanced spacing
+    const totalWidth = table.width * 1.3; // Increased from 1.2 to 1.3 for better spacing
     const spacing = totalWidth / (count + 1);
     
     equipmentTypes.forEach((type, index) => {
       // Start from left edge of table, then add spacing for each item
-      const leftEdge = table.x - table.width / 2;
-      const xPos = leftEdge + spacing * (index + 1) + dynamicOffset; // Apply offset
+      // Balance offset to prevent overflow while maintaining good centering
+      const leftEdge = table.x - totalWidth / 2;
+      const xPos = leftEdge + spacing * (index + 1) + (dynamicOffset * 0.85); // Increased from 0.5x to 0.65x
       
       items.push({
         id: `equipment${startId + index}`,

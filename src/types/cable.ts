@@ -83,7 +83,7 @@ export const CABLE_CONSTANTS = {
   FLAT_WIRE_WIDTH: 8,
   
   // Node visualization
-  NODE_RADIUS: 20, // Size of connection point circles (much bigger for mobile)
+  NODE_RADIUS: 30, // Size of connection point circles (1.5x bigger for mobile)
   NODE_STROKE_WIDTH: 4,
   
   // NEW: Updated node colors based on requirements

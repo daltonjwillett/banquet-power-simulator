@@ -21,7 +21,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20,
         offsetX: 0,
-        offsetY: -50,
+        offsetY: -70,
       },
       { 
         id: 'out2', 
@@ -29,7 +29,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20,
         offsetX: 0,
-        offsetY: 55, 
+        offsetY: 70, 
       }
     ],
     canDoTrue20: true,
@@ -157,7 +157,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         id: 'in', 
         type: 'input', 
         connectionType: ConnectionType.EDISON,
-        offsetX: -115,
+        offsetX: -140,
         offsetY: -55,
       },
       { 
@@ -173,7 +173,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20,
-        offsetX: 60,
+        offsetX: 85,
         offsetY: -40,
       },
       { 
@@ -182,15 +182,15 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20,
         offsetX: -40,
-        offsetY: 60,
+        offsetY: 85,
       },
       { 
         id: 'out4', 
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20,
-        offsetX: 60,
-        offsetY: 60,
+        offsetX: 85,
+        offsetY: 85,
       },
     ],
     ampLimit: 20,
@@ -206,7 +206,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         id: 'in', 
         type: 'input', 
         connectionType: ConnectionType.EDISON,
-        offsetX: 100,
+        offsetX: 125,
         offsetY: -50,
       },
       { 
@@ -214,48 +214,48 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 15,
-        offsetX: -80,
-        offsetY: 90,
+        offsetX: -60,
+        offsetY: 100,
       },
       { 
         id: 'out2', 
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 15,
-        offsetX: 10,
-        offsetY: 90,
+        offsetX: 50,
+        offsetY: 100,
       },
       { 
         id: 'out3', 
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 15,
-        offsetX: 100,
-        offsetY: 90,
+        offsetX: 160,
+        offsetY: 100,
       },
       { 
         id: 'out4', 
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 15,
-        offsetX: -80,
-        offsetY: -0,
+        offsetX: -60,
+        offsetY: -20,
       },
       { 
         id: 'out5', 
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 15,
-        offsetX: 10,
-        offsetY: -0,
+        offsetX: 50,
+        offsetY: -20,
       },
       { 
         id: 'out6', 
         type: 'output', 
         connectionType: ConnectionType.EDISON, 
         maxAmps: 15,
-        offsetX: 100,
-        offsetY: -0,
+        offsetX: 160,
+        offsetY: -20,
       },
     ],
     ampLimit: 15,
@@ -272,7 +272,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         type: 'input', 
         connectionType: ConnectionType.L21_30,
         offsetX: -35,
-        offsetY: 85,
+        offsetY: 95,
       },
       // PAIR 1 (Black) - Top section
       { 
@@ -281,8 +281,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20, 
         pairId: 1,
-        offsetX: -40,
-        offsetY: -50, // Top of pair 1
+        offsetX: -65,
+        offsetY: -60, // Top of pair 1
       },
       { 
         id: 'out2', 
@@ -290,8 +290,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20, 
         pairId: 1,
-        offsetX: -40,
-        offsetY: 40, // Bottom of pair 1
+        offsetX: -65,
+        offsetY: 60, // Bottom of pair 1
       },
       // PAIR 2 (Red) - Middle section
       { 
@@ -301,7 +301,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         maxAmps: 20, 
         pairId: 2,
         offsetX: 50,
-        offsetY: -50, // Top of pair 2 (center)
+        offsetY: -60, // Top of pair 2 (center)
       },
       { 
         id: 'out4', 
@@ -310,7 +310,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         maxAmps: 20, 
         pairId: 2,
         offsetX: 50,
-        offsetY: 40, // Bottom of pair 2
+        offsetY: 60, // Bottom of pair 2
       },
       // PAIR 3 (Blue) - Bottom section
       { 
@@ -319,8 +319,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20, 
         pairId: 3,
-        offsetX: 140,
-        offsetY: -50, // Top of pair 3
+        offsetX: 165,
+        offsetY: -60, // Top of pair 3
       },
       { 
         id: 'out6', 
@@ -328,8 +328,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         connectionType: ConnectionType.EDISON, 
         maxAmps: 20, 
         pairId: 3,
-        offsetX: 140,
-        offsetY: 40, // Bottom of pair 3
+        offsetX: 165,
+        offsetY: 60, // Bottom of pair 3
       },
     ],
     canDoTrue20: true,
@@ -344,23 +344,23 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         id: 'in', 
         type: 'input', 
         connectionType: ConnectionType.L21_30,
-        offsetX: 10,
-        offsetY: 110,
+        offsetX: 35,
+        offsetY: 135,
       },
       { 
         id: 'out1', 
         type: 'output', 
         connectionType: ConnectionType.L6_20, 
         maxAmps: 20,
-        offsetX: -50,
-        offsetY: 100,
+        offsetX: -65,
+        offsetY: 125,
       },
       { 
         id: 'out2', 
         type: 'output', 
         connectionType: ConnectionType.L6_20, 
         maxAmps: 20,
-        offsetX: -100,
+        offsetX: -130,
         offsetY: 20,
       },
       { 
@@ -383,16 +383,16 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         id: 'in', 
         type: 'input', 
         connectionType: ConnectionType.L21_30,
-        offsetX: 130,
-        offsetY: 50,
+        offsetX: 180,
+        offsetY: 65,
       },
       { 
         id: 'out', 
         type: 'output', 
         connectionType: ConnectionType.L6_30, 
         maxAmps: 30,
-        offsetX: -140,
-        offsetY: 30,
+        offsetX: -180,
+        offsetY: 45,
       },
     ],
   },

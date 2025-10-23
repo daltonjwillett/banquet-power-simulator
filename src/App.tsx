@@ -58,6 +58,10 @@ function App() {
   const [shopOpen, setShopOpen] = useState(false);
   const [scale, setScale] = useState(1);
   const [nextItemId, setNextItemId] = useState(1);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const isPanning = useRef(false);
+  const lastPanPosition = useRef({ x: 0, y: 0 });
   
   const [showStartModal, setShowStartModal] = useState(true);
   const [gameStarted, setGameStarted] = useState(false);
@@ -71,6 +75,7 @@ function App() {
   const [hint1Used, setHint1Used] = useState(false);
   const [hint2Used, setHint2Used] = useState(false);
   const [penaltyPopup, setPenaltyPopup] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [currentScenarioId, setCurrentScenarioId] = useState(() => {
     // Start with random scenario (1-50)
@@ -401,7 +406,7 @@ function App() {
       const toNode = allNodes.find(n => n.id === toNodeId);
       
       if (toNode) {
-        // CRITICAL FIX: Cables must flow in the direction of power (outlet â†’ equipment)
+        // CRITICAL FIX: Cables must flow in the direction of power (outlet Ã¢â€ â€™ equipment)
         // If user dragged from input (tail) to output (outlet), reverse the direction
         let finalFromNodeId = draggingCable.fromNodeId;
         let finalToNodeId = toNodeId;
@@ -414,7 +419,7 @@ function App() {
           finalToNodeId = draggingCable.fromNodeId;
           finalFromPos = toNode.position;
           finalToPos = fromNode.position;
-          console.log(`[CABLE] Reversed cable direction: ${finalFromNodeId} â†’ ${finalToNodeId}`);
+          console.log(`[CABLE] Reversed cable direction: ${finalFromNodeId} Ã¢â€ â€™ ${finalToNodeId}`);
         }
         
         // Calculate cable path for completed connection
@@ -548,10 +553,92 @@ function App() {
     }
   };
 
+  const handleZoomToggle = () => {
+    setIsZoomedIn(!isZoomedIn);
+    // Reset pan when toggling zoom
+    if (isZoomedIn) {
+      setPanOffset({ x: 0, y: 0 });
+    }
+  };
+
+  const handlePanStart = (clientX: number, clientY: number) => {
+    if (isZoomedIn) {
+      isPanning.current = true;
+      lastPanPosition.current = { x: clientX, y: clientY };
+    }
+  };
+
+  const handlePanMove = (clientX: number, clientY: number) => {
+    if (isPanning.current && isZoomedIn) {
+      const deltaX = clientX - lastPanPosition.current.x;
+      const deltaY = clientY - lastPanPosition.current.y;
+      
+      setPanOffset(prev => {
+        const newX = prev.x + deltaX;
+        const newY = prev.y + deltaY;
+        
+        // Calculate boundaries
+        // When zoomed 1.5x, the canvas is larger, so we can pan by (1.5 - 1) / 2 = 25% in each direction
+        // The canvas is 1080x1920 at base scale, so at 1.5x it's 1620x2880
+        // Visible area at scale is 1080x1920, so we can pan (1620-1080)/2 = 270px in X, (2880-1920)/2 = 480px in Y
+        // But we need to account for the responsive scale as well
+        const baseWidth = 1080;
+        const baseHeight = 1920;
+        const zoomScale = 1.5;
+        
+        // Calculate max pan distance (in screen pixels)
+        const maxPanX = ((baseWidth * zoomScale - baseWidth) / 2) * scale;
+        const maxPanY = ((baseHeight * zoomScale - baseHeight) / 2) * scale;
+        
+        // Clamp the pan offset
+        const clampedX = Math.max(-maxPanX, Math.min(maxPanX, newX));
+        const clampedY = Math.max(-maxPanY, Math.min(maxPanY, newY));
+        
+        return { x: clampedX, y: clampedY };
+      });
+      
+      lastPanPosition.current = { x: clientX, y: clientY };
+    }
+  };
+
+  const handlePanEnd = () => {
+    isPanning.current = false;
+  };
+
   const showPenaltyPopup = (minutes: number) => {
     setPenaltyPopup(`+${minutes}:00`);
     setTimeout(() => setPenaltyPopup(null), 2000);
   };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      // Enter fullscreen
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch((err) => {
+        console.error('Error attempting to enable fullscreen:', err);
+      });
+    } else {
+      // Exit fullscreen
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch((err) => {
+        console.error('Error attempting to exit fullscreen:', err);
+      });
+    }
+  };
+
+  // Listen for fullscreen changes (e.g., user presses ESC)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   const handleSubmit = async () => {
     if (!userSession) return; // Safety check
@@ -661,6 +748,61 @@ function App() {
         }}
       >
         <div className="relative w-full h-full">
+          {/* Zoomable Canvas Container */}
+          <div
+            className="absolute inset-0"
+            style={{
+              cursor: isZoomedIn ? 'grab' : 'default',
+              overflow: 'hidden',
+            }}
+            onMouseDown={(e) => {
+              if (isZoomedIn && e.button === 0) {
+                handlePanStart(e.clientX, e.clientY);
+                e.currentTarget.style.cursor = 'grabbing';
+              }
+            }}
+            onMouseMove={(e) => {
+              if (isZoomedIn) {
+                handlePanMove(e.clientX, e.clientY);
+              }
+            }}
+            onMouseUp={(e) => {
+              if (isZoomedIn) {
+                handlePanEnd();
+                e.currentTarget.style.cursor = 'grab';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (isZoomedIn) {
+                handlePanEnd();
+                e.currentTarget.style.cursor = 'grab';
+              }
+            }}
+            onTouchStart={(e) => {
+              if (isZoomedIn && e.touches.length === 1) {
+                handlePanStart(e.touches[0].clientX, e.touches[0].clientY);
+              }
+            }}
+            onTouchMove={(e) => {
+              if (isZoomedIn && e.touches.length === 1) {
+                handlePanMove(e.touches[0].clientX, e.touches[0].clientY);
+              }
+            }}
+            onTouchEnd={() => {
+              if (isZoomedIn) {
+                handlePanEnd();
+              }
+            }}
+          >
+            <div 
+              style={{
+                transform: isZoomedIn ? `scale(1.5) translate(${panOffset.x / (scale * 1.5)}px, ${panOffset.y / (scale * 1.5)}px)` : 'none',
+                transformOrigin: 'center center',
+                transition: isZoomedIn ? 'none' : 'transform 0.3s ease-out',
+                width: '100%',
+                height: '100%',
+              }}
+            >
           <GameCanvas
             scenario={currentScenario!}
             placedAccessories={placedAccessories}
@@ -681,6 +823,8 @@ function App() {
             hint1Active={hint1Used}
             hint2Active={hint2Active}
             outletUsage={outletUsage}
+            isZoomedIn={isZoomedIn}
+            panOffset={panOffset}
           />
 
           {/* Validation Overlay */}
@@ -693,6 +837,9 @@ function App() {
               disconnectedItems={validationResult.disconnectedItems}
             />
           )}
+            </div>
+          </div>
+          {/* End of Zoomable Canvas Container */}
 
           {showStartModal && (
             <StartModal
@@ -763,6 +910,7 @@ function App() {
           {/* Bottom Toolbar */}
           <div className="absolute bottom-0 left-0 right-0 h-[150px] bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-t-2 border-gray-700 shadow-2xl z-[60]">
             <div className="h-full flex items-center justify-between px-12">
+              {/* Left: Settings */}
               <button 
                 onClick={handleSettingsToggle}
                 className="group flex flex-col items-center gap-2 text-gray-300 hover:text-white transition-colors p-3"
@@ -774,6 +922,7 @@ function App() {
                 <span className="font-semibold text-sm">Settings</span>
               </button>
 
+              {/* Center: SUBMIT Button */}
               <button 
                 onClick={handleSubmit}
                 disabled={!gameStarted}
@@ -785,18 +934,38 @@ function App() {
                 </div>
               </button>
 
-              <button 
-                onClick={hint1Used ? handleHint2 : handleHint1}
-                disabled={!gameStarted || (hint1Used && hint2Used)}
-                className="group flex flex-col items-center gap-2 text-gray-300 hover:text-white transition-colors p-3 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <span className="font-semibold text-sm">
-                  {hint2Used ? 'No Hints' : hint1Used ? 'Hint 2' : 'Hint 1'}
-                </span>
-              </button>
+              {/* Right: Zoom and Hint */}
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={handleZoomToggle}
+                  className="group flex flex-col items-center gap-2 text-gray-300 hover:text-white transition-colors p-3"
+                  title={isZoomedIn ? "Zoom Out" : "Zoom In"}
+                >
+                  {isZoomedIn ? (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                  )}
+                  <span className="font-semibold text-sm">{isZoomedIn ? 'Zoom Out' : 'Zoom In'}</span>
+                </button>
+
+                <button 
+                  onClick={hint1Used ? handleHint2 : handleHint1}
+                  disabled={!gameStarted || (hint1Used && hint2Used)}
+                  className="group flex flex-col items-center gap-2 text-gray-300 hover:text-white transition-colors p-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  <span className="font-semibold text-sm">
+                    {hint2Used ? 'No Hints' : hint1Used ? 'Hint 2' : 'Hint 1'}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -844,16 +1013,37 @@ function App() {
               </div>
             )}
 
-            <div className="bg-gradient-to-br from-gray-800 to-gray-900 text-white px-6 py-3 rounded-xl shadow-lg border border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="text-left">
-                  <div className="text-xs text-gray-400 uppercase tracking-wide">Items</div>
-                  <div className="text-3xl font-bold">{placedAccessories.length + cables.length}</div>
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-gray-800 to-gray-900 text-white px-6 py-3 rounded-xl shadow-lg border border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="text-left">
+                    <div className="text-xs text-gray-400 uppercase tracking-wide">Items</div>
+                    <div className="text-3xl font-bold">{placedAccessories.length + cables.length}</div>
+                  </div>
+                  <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
                 </div>
-                <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
               </div>
+
+              {/* Fullscreen Button */}
+              <button
+                onClick={toggleFullscreen}
+                className="group bg-gradient-to-br from-gray-800 to-gray-900 p-4 rounded-xl shadow-lg border border-gray-700 hover:border-blue-500 hover:shadow-blue-500/20 transition-all"
+                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              >
+                {isFullscreen ? (
+                  // Exit Fullscreen Icon
+                  <svg className="w-11 h-11 text-blue-400 group-hover:text-blue-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                  </svg>
+                ) : (
+                  // Enter Fullscreen Icon
+                  <svg className="w-11 h-11 text-blue-400 group-hover:text-blue-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
 

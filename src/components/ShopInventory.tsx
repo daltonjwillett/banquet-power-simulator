@@ -45,15 +45,22 @@ export default function ShopInventory({
     if (selectedCableType) {
       onSelectCableType(null);
     }
-    // Toggle accessory selection
-    onSelectItem(selectedItem === itemType ? null : itemType);
+    
+    // If clicking the same item, deselect it (don't close shop)
+    if (selectedItem === itemType) {
+      onSelectItem(null);
+    } else {
+      // Selecting a new item - select it and close the shop
+      onSelectItem(itemType);
+      onToggle(); // Close the shop
+    }
   };
 
   return (
     <div
       className="bg-gradient-to-b from-gray-800 to-gray-900 border-t-2 border-gray-700 shadow-2xl transition-all duration-300 ease-in-out relative z-50"
       style={{
-        height: isOpen ? '600px' : '0px',
+        height: isOpen ? '720px' : '0px', // Increased from 600px to 720px
       }}
     >
       {/* Toggle Bar with Cable Buttons - Always Visible - 130px height */}
@@ -116,9 +123,9 @@ export default function ShopInventory({
         </button>
       </div>
 
-      {/* Shop Content - 3 columns for accessories */}
+      {/* Shop Content - 3 columns for accessories, NO SCROLLING */}
       {isOpen && (
-        <div className="h-[470px] overflow-y-auto p-6 relative z-50">
+        <div className="h-[590px] p-6 relative z-50">
           {/* Accessories Section */}
           <div>
             <div className="flex items-center gap-3 mb-4">
@@ -153,7 +160,7 @@ export default function ShopInventory({
                     )}
 
                     {/* Item Image or Placeholder */}
-                    <div className="w-full aspect-square flex items-center justify-center mb-3 bg-gray-900/50 rounded-lg p-2">
+                    <div className="w-full aspect-video flex items-center justify-center mb-3 bg-gray-900/50 rounded-lg p-2">
                       {def.imagePath ? (
                         <img
                           src={def.imagePath}

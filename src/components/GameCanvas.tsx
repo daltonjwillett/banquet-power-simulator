@@ -32,6 +32,8 @@ interface GameCanvasProps {
   hint1Active: boolean;
   hint2Active: boolean;
   outletUsage?: Map<string, OutletUsage>;
+  isZoomedIn?: boolean;
+  panOffset?: { x: number; y: number };
 }
 
 export default function GameCanvas({
@@ -54,6 +56,8 @@ export default function GameCanvas({
   hint1Active,
   hint2Active,
   outletUsage,
+  isZoomedIn = false,
+  panOffset = { x: 0, y: 0 },
 }: GameCanvasProps) {
   // Mark handlers as used (they're called from App.tsx trash bin)
   void onAccessoryRemove;
@@ -176,8 +180,27 @@ export default function GameCanvas({
     if (!canvasRef.current) return { x: 0, y: 0 };
     
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = (clientX - rect.left) / scale;
-    const y = (clientY - rect.top) / scale;
+    
+    // Get position relative to canvas
+    let x = (clientX - rect.left) / scale;
+    let y = (clientY - rect.top) / scale;
+    
+    // If zoomed in, we need to account for the zoom transform and pan offset
+    if (isZoomedIn) {
+      const zoomScale = 1.5;
+      const canvasCenter = {
+        x: rect.width / (2 * scale),
+        y: rect.height / (2 * scale),
+      };
+      
+      // Reverse the pan offset (convert screen pixels to canvas pixels)
+      const panX = panOffset.x / (scale * zoomScale);
+      const panY = panOffset.y / (scale * zoomScale);
+      
+      // Adjust for zoom: position relative to center, then divide by zoom, then add center back
+      x = (x - canvasCenter.x) / zoomScale + canvasCenter.x - panX;
+      y = (y - canvasCenter.y) / zoomScale + canvasCenter.y - panY;
+    }
     
     return { x, y };
   };
@@ -451,24 +474,45 @@ export default function GameCanvas({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {scenario.tables.map((table) => (
-          <div
-            key={table.id}
-            className="absolute bg-gradient-to-br from-amber-50 to-amber-100 border-4 border-amber-700 rounded-2xl shadow-lg pointer-events-none"
-            style={{
-              left: `${table.x}px`,
-              top: `${table.y}px`,
-              width: `${table.width}px`,
-              height: `${table.height}px`,
-            }}
-          >
-            <div className="absolute inset-0 opacity-10 rounded-xl" 
-                 style={{
-                   backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.1) 10px, rgba(0,0,0,0.1) 20px)'
-                 }} 
-            />
-          </div>
-        ))}
+        {scenario.tables.map((table) => {
+          // Calculate width multiplier based on equipment count
+          const equipmentCount = table.equipment?.length || 0;
+          let widthMultiplier = 1.2; // Default for 1-3 items
+          
+          if (equipmentCount >= 6) {
+            widthMultiplier = 1.5; // Wider for 6+ items
+          } else if (equipmentCount === 5) {
+            widthMultiplier = 1.4; // Wider for 5 items
+          } else if (equipmentCount === 4) {
+            widthMultiplier = 1.3; // Slightly wider for 4 items
+          }
+          
+          // Calculate final width and subtract 25px to prevent overflow
+          const finalWidth = (table.width * widthMultiplier) - 25;
+          
+          // Ensure table doesn't go off screen (max canvas width is 1080)
+          const maxAllowedWidth = 1080 - table.x - 80; // 80px right padding
+          const clampedWidth = Math.min(finalWidth, maxAllowedWidth);
+          
+          return (
+            <div
+              key={table.id}
+              className="absolute bg-gradient-to-br from-amber-50 to-amber-100 border-4 border-amber-700 rounded-2xl shadow-lg pointer-events-none"
+              style={{
+                left: `${table.x}px`,
+                top: `${table.y}px`,
+                width: `${clampedWidth}px`,
+                height: `${table.height}px`,
+              }}
+            >
+              <div className="absolute inset-0 opacity-10 rounded-xl" 
+                   style={{
+                     backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.1) 10px, rgba(0,0,0,0.1) 20px)'
+                   }} 
+              />
+            </div>
+          );
+        })}
 
         <CableRenderer
           cables={cables}
@@ -501,7 +545,7 @@ export default function GameCanvas({
           className="absolute inset-0"
           style={{
             zIndex: 45,
-            pointerEvents: 'none',
+            pointerEvents: 'none', // Keep as 'none' - child elements handle their own events
             width: '100%',
             height: '100%',
           }}
@@ -542,7 +586,7 @@ export default function GameCanvas({
               onTouchStart={(e) => handleItemTouchStart(e, item.id, isLocked)}
               onClick={(e) => handleItemClick(e, item.id)}
             >
-              <div className={`relative ${isSelected && !isDragging && !selectedShopItem && !selectedCableType ? 'animate-pulse' : ''}`}>
+              <div className={`relative ${isSelected && !isDragging && !selectedShopItem && !selectedCableType ? 'animate-pulse' : ''}`} style={{ transform: 'scale(1.5)', transformOrigin: 'center' }}>
                 {def.imagePath ? (
                   <img
                     src={def.imagePath}
@@ -626,7 +670,7 @@ export default function GameCanvas({
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              {group.ampDraw.toFixed(1)}A{group.count > 1 ? ` ×${group.count}` : ''}
+              {group.ampDraw.toFixed(1)}A{group.count > 1 ? ` Ãƒâ€”${group.count}` : ''}
               {group.specialReq && (
                 <span className="ml-2 text-xs bg-orange-500 px-2 py-1 rounded">
                   {group.specialReq}
@@ -637,7 +681,7 @@ export default function GameCanvas({
         ))}
 
         {selectedShopItem && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[100]">
             <div className="bg-black/70 text-white px-8 py-4 rounded-2xl text-xl font-semibold shadow-2xl backdrop-blur-sm border border-white/20">
               Click to place {ITEM_DEFINITIONS[selectedShopItem]?.displayName}
             </div>
@@ -645,7 +689,7 @@ export default function GameCanvas({
         )}
 
         {selectedCableType && !selectedShopItem && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[100]">
             <div className="bg-black/70 text-white px-8 py-4 rounded-2xl text-xl font-semibold shadow-2xl backdrop-blur-sm border border-white/20">
               Click an outlet to start drawing {selectedCableType === 'edison' ? 'Edison' : 'Flat-Wire'} cable
             </div>

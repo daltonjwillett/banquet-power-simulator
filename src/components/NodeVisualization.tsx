@@ -97,12 +97,14 @@ export default function NodeVisualization({
               e.stopPropagation();
               onNodeClick?.(node);
             }}
-            onMouseDown={(e) => {
+            onTouchStart={(e) => {
               e.stopPropagation();
+              onNodeClick?.(node);
             }}
             style={{ 
               cursor: 'pointer',
               pointerEvents: 'all',
+              touchAction: 'none',
             }}
             className="hover:opacity-80 transition-opacity"
           >
@@ -125,7 +127,7 @@ export default function NodeVisualization({
               stroke="white"
               strokeWidth={strokeWidth}
               opacity={isEquipmentTail ? 0.8 : 0.9}
-              style={{ pointerEvents: 'all', cursor: 'pointer' }}
+              style={{ pointerEvents: 'all', cursor: 'pointer', touchAction: 'none' }}
               className="transition-all hover:scale-110"
             />
 
@@ -153,14 +155,18 @@ export default function NodeVisualization({
               />
             )}
 
-            {/* Large invisible hit area for easier clicking */}
+            {/* Large invisible hit area for easier clicking/touching */}
             <circle
               cx={node.position.x}
               cy={node.position.y}
-              r={radius * 3}
+              r={radius * 3.5}
               fill="transparent"
-              style={{ pointerEvents: 'all', cursor: 'pointer' }}
+              style={{ pointerEvents: 'all', cursor: 'pointer', touchAction: 'none' }}
               onClick={(e) => {
+                e.stopPropagation();
+                onNodeClick?.(node);
+              }}
+              onTouchStart={(e) => {
                 e.stopPropagation();
                 onNodeClick?.(node);
               }}
