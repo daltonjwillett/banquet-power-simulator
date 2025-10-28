@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  base: '/banquet-power-simulator/',
   build: {
     target: 'es2015', // Lower target for older browsers
     cssTarget: 'chrome61', // Android 9 equivalent
