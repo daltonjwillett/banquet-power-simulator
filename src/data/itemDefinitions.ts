@@ -157,8 +157,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
         id: 'in', 
         type: 'input', 
         connectionType: ConnectionType.EDISON,
-        offsetX: -140,
-        offsetY: -55,
+        offsetX: -100,
+        offsetY: -45,
       },
       { 
         id: 'out1', 

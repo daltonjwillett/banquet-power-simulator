@@ -144,6 +144,7 @@ export default function TutorialManager({
           message={bubbleMessage}
           onDismiss={handleBubbleDismiss}
           position="top"
+          stepId={tutorialStep}
         />
       )}
 

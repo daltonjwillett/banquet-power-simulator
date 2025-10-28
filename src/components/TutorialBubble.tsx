@@ -5,9 +5,10 @@ interface TutorialBubbleProps {
   message: string;
   onDismiss: () => void;
   position?: 'top' | 'center' | 'bottom';
+  stepId?: string;
 }
 
-export default function TutorialBubble({ message, onDismiss, position = 'top' }: TutorialBubbleProps) {
+export default function TutorialBubble({ message, onDismiss, position = 'top', stepId }: TutorialBubbleProps) {
   // Position styles based on prop
   const positionStyles = {
     top: 'top-[200px]',
@@ -15,9 +16,17 @@ export default function TutorialBubble({ message, onDismiss, position = 'top' }:
     bottom: 'bottom-32',
   };
 
+  // Determine if this step should be orange
+  const isOrangeStep = stepId === 'scenario_1002_place_quadbox' || stepId === 'scenario_1003_use_hints';
+
+  // Color styles based on step
+  const colorStyles = isOrangeStep
+    ? 'bg-gradient-to-br from-orange-600 to-orange-800 border-orange-400'
+    : 'bg-gradient-to-br from-blue-600 to-blue-800 border-blue-400';
+
   return (
     <div className={`absolute left-1/2 -translate-x-1/2 ${positionStyles[position]} z-50 w-[80%] max-w-[900px]`}>
-      <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl shadow-2xl p-6 border-3 border-blue-400">
+      <div className={`relative ${colorStyles} rounded-2xl shadow-2xl p-6 border-3`}>
         {/* Close button */}
         <button
           onClick={onDismiss}

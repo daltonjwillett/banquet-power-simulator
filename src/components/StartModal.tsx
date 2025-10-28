@@ -21,7 +21,17 @@ export default function StartModal({ scenario, employeeId, onStart }: StartModal
   const [userBest, setUserBest] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Check if this is a tutorial scenario (1001, 1002, 1003)
+  const isTutorial = scenario.id >= 1001 && scenario.id <= 1003;
+  const tutorialPart = isTutorial ? scenario.id - 1000 : 0;
+
   useEffect(() => {
+    // Skip fetching scores for tutorial scenarios
+    if (isTutorial) {
+      setIsLoading(false);
+      return;
+    }
+
     async function fetchScores() {
       setIsLoading(true);
       
@@ -37,7 +47,7 @@ export default function StartModal({ scenario, employeeId, onStart }: StartModal
     }
 
     fetchScores();
-  }, [scenario.id, employeeId]);
+  }, [scenario.id, employeeId, isTutorial]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -89,12 +99,18 @@ export default function StartModal({ scenario, employeeId, onStart }: StartModal
     <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4">
       <div 
         className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl shadow-2xl border-2 border-gray-700 overflow-hidden flex flex-col"
-        style={{ width: '900px', height: '1400px', maxWidth: '100%', maxHeight: '100%' }}
+        style={{ 
+          width: '900px', 
+          maxWidth: '100%', 
+          maxHeight: '100%',
+          // Dynamic height: tutorials are shorter without leaderboard
+          ...(isTutorial ? {} : { height: '1400px' })
+        }}
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-8 border-b-2 border-gray-700">
           <h2 className="text-5xl font-bold text-white text-center mb-4">
-            Scenario {scenario.id}
+            {isTutorial ? `Tutorial Part ${tutorialPart}/3` : `Scenario ${scenario.id}`}
           </h2>
           <p className="text-2xl text-gray-300 text-center mb-6">{scenario.name}</p>
           
@@ -115,79 +131,81 @@ export default function StartModal({ scenario, employeeId, onStart }: StartModal
             </p>
           </div>
 
-          {/* Leaderboard Section */}
-          <div className="bg-gray-700/50 rounded-2xl p-6 border border-gray-600">
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <Icon path={mdiTrophy} size={1.5} className="text-yellow-500" />
-              <h3 className="text-2xl font-bold text-white">Top 5 Leaderboard</h3>
-            </div>
-
-            {isLoading ? (
-              <div className="text-center py-8">
-                <p className="text-xl text-gray-400">Loading scores...</p>
+          {/* Leaderboard Section - Only show for non-tutorial scenarios */}
+          {!isTutorial && (
+            <div className="bg-gray-700/50 rounded-2xl p-6 border border-gray-600">
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <Icon path={mdiTrophy} size={1.5} className="text-yellow-500" />
+                <h3 className="text-2xl font-bold text-white">Top 5 Leaderboard</h3>
               </div>
-            ) : leaderboard.length > 0 ? (
-              <div className="space-y-3">
-                {leaderboard.map((entry) => (
-                  <div
-                    key={entry.rank}
-                    className={`flex items-center justify-between p-4 rounded-xl ${
-                      entry.employeeId === employeeId
-                        ? 'bg-blue-900/30 border-2 border-blue-500'
-                        : 'bg-gray-800/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <Icon 
-                        path={getRankIcon(entry.rank)} 
-                        size={1.2} 
-                        className={getRankColor(entry.rank)}
-                      />
-                      <div>
-                        <div className="text-xl font-bold text-white">
-                          #{entry.rank} {entry.employeeName}
+
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-xl text-gray-400">Loading scores...</p>
+                </div>
+              ) : leaderboard.length > 0 ? (
+                <div className="space-y-3">
+                  {leaderboard.map((entry) => (
+                    <div
+                      key={entry.rank}
+                      className={`flex items-center justify-between p-4 rounded-xl ${
+                        entry.employeeId === employeeId
+                          ? 'bg-blue-900/30 border-2 border-blue-500'
+                          : 'bg-gray-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <Icon 
+                          path={getRankIcon(entry.rank)} 
+                          size={1.2} 
+                          className={getRankColor(entry.rank)}
+                        />
+                        <div>
+                          <div className="text-xl font-bold text-white">
+                            #{entry.rank} {entry.employeeName}
+                          </div>
+                          {entry.employeeId === employeeId && (
+                            <div className="text-sm text-blue-400">Your best time</div>
+                          )}
                         </div>
-                        {entry.employeeId === employeeId && (
-                          <div className="text-sm text-blue-400">Your best time</div>
-                        )}
+                      </div>
+                      <div className="text-2xl font-bold text-white">
+                        {formatTime(entry.timeSeconds)}
                       </div>
                     </div>
-                    <div className="text-2xl font-bold text-white">
-                      {formatTime(entry.timeSeconds)}
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-xl text-gray-400">No times recorded yet</p>
+                  <p className="text-lg text-gray-500 mt-2">Be the first to complete this scenario!</p>
+                </div>
+              )}
+
+              {/* User's best if not in top 5 */}
+              {userBest !== null && !leaderboard.some(entry => entry.employeeId === employeeId) && (
+                <div className="mt-6 pt-6 border-t border-gray-600">
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-xl">
+                    <span className="text-xl text-gray-300">Your Best Time:</span>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {formatTime(userBest)}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-xl text-gray-400">No times recorded yet</p>
-                <p className="text-lg text-gray-500 mt-2">Be the first to complete this scenario!</p>
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* User's best if not in top 5 */}
-            {userBest !== null && !leaderboard.some(entry => entry.employeeId === employeeId) && (
-              <div className="mt-6 pt-6 border-t border-gray-600">
-                <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-xl">
-                  <span className="text-xl text-gray-300">Your Best Time:</span>
-                  <div className="text-2xl font-bold text-blue-400">
-                    {formatTime(userBest)}
+              {/* First time message */}
+              {userBest === null && (
+                <div className="mt-6 pt-6 border-t border-gray-600">
+                  <div className="text-center p-4 bg-blue-900/20 rounded-xl border border-blue-700">
+                    <p className="text-lg text-blue-300">
+                      This will be your first attempt at this scenario!
+                    </p>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* First time message */}
-            {userBest === null && (
-              <div className="mt-6 pt-6 border-t border-gray-600">
-                <div className="text-center p-4 bg-blue-900/20 rounded-xl border border-blue-700">
-                  <p className="text-lg text-blue-300">
-                    This will be your first attempt at this scenario!
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Equipment List Toggle */}
           <button

@@ -143,7 +143,7 @@ export default function SettingsPanel({
             </button>
           </div>
 
-          {/* App Info */}
+          {/* App Info 
           <div className="bg-gray-700/30 rounded-2xl p-8 border border-gray-600">
             <h3 className="text-2xl font-semibold text-white mb-4">About</h3>
             <p className="text-lg text-gray-400 mb-3">
@@ -152,7 +152,7 @@ export default function SettingsPanel({
             <p className="text-base text-gray-400">
               Train and compete to be the fastest and most accurate power setter in the department.
             </p>
-          </div>
+          </div> */}
 
           {/* Spacer to push logout to bottom */}
           <div className="flex-1"></div>
