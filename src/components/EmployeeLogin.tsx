@@ -139,7 +139,7 @@ export default function EmployeeLogin({ onLoginSuccess }: EmployeeLoginProps) {
         {/* Help Text */}
         <p className="mt-6 text-center text-sm text-gray-400">
           Don't have an employee ID?<br />
-          Contact your administrator to get registered.
+          Contact the training manager to get registered.
         </p>
       </div>
     </div>
