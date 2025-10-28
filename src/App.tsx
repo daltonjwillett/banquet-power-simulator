@@ -9,7 +9,9 @@ import NicelyDoneModal from './components/NicelyDoneModal';
 import LeaderboardModal from './components/LeaderboardModal';
 import AdminPinModal from './components/AdminPinModal';
 import AdminPanel from './components/AdminPanel';
+import TutorialManager from './components/TutorialManager';
 import { getScenarioById } from './data/scenarios';
+import { getTutorialScenarioById } from './data/tutorialScenarios';
 import { ItemType } from './types';
 import type { PlacedItem } from './types';
 import type { Cable, DraggingCable } from './types/cable';
@@ -24,6 +26,12 @@ import {
   updateLastThreeScenarios,
   getRandomAvailableScenario 
 } from './lib/supabaseHelpers';
+import { 
+  hasTutorialCompleted, 
+  markTutorialCompleted,
+  resetTutorialStatus 
+} from './lib/tutorialHelpers';
+import { getNextTutorialScenario, getFirstTutorialScenario } from './utils/tutorialUtils';
 import { 
   generateCableId, 
   calculateCablePath, 
@@ -68,6 +76,8 @@ function App() {
   const [stopwatchRunning, setStopwatchRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [nodesHidden, setNodesHidden] = useState(false);
+  const [nodeSize, setNodeSize] = useState<'small' | 'large'>('large');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   
@@ -77,11 +87,19 @@ function App() {
   const [penaltyPopup, setPenaltyPopup] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Tutorial state
+  const [inTutorial, setInTutorial] = useState(false);
+  const [tutorialValidationTriggered, setTutorialValidationTriggered] = useState(false);
+
   const [currentScenarioId, setCurrentScenarioId] = useState(() => {
     // Start with random scenario (1-50)
     return Math.floor(Math.random() * 50) + 1;
   });
-  const currentScenario = getScenarioById(currentScenarioId);
+  
+  // Load scenario based on tutorial state
+  const currentScenario = inTutorial 
+    ? getTutorialScenarioById(currentScenarioId)
+    : getScenarioById(currentScenarioId);
 
   // Hint active states (for display logic)
   const hint2Active = hint2Used;
@@ -110,8 +128,17 @@ function App() {
     setIsCheckingSession(false);
   }, []);
 
-  const handleLoginSuccess = (employeeId: string, userName: string) => {
+  const handleLoginSuccess = async (employeeId: string, userName: string) => {
     setUserSession({ employeeId, userName });
+    
+    // Check if user has completed tutorial
+    const tutorialComplete = await hasTutorialCompleted(employeeId);
+    if (!tutorialComplete) {
+      // Start tutorial
+      setInTutorial(true);
+      setCurrentScenarioId(getFirstTutorialScenario());
+      setShowStartModal(true);
+    }
   };
 
   const handleLogout = () => {
@@ -212,24 +239,41 @@ function App() {
     );
   }, [hint2Active, placedAccessories, cables, currentScenario]);
 
-  // Calculate scale to fit the 1080x1920 canvas to viewport
+  // Dynamic canvas dimensions based on viewport aspect ratio
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 1080, height: 1920 });
+
+  // Calculate scale and canvas dimensions to fit the viewport with aspect ratio constraints
   useEffect(() => {
-    const calculateScale = () => {
+    const calculateScaleAndDimensions = () => {
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const designWidth = 1080;
-      const designHeight = 1920;
+      const viewportAspect = viewportWidth / viewportHeight;
 
+      // Define aspect ratio constraints
+      const minAspect = 9 / 16;  // 0.5625 - narrowest (mobile portrait)
+      const maxAspect = 3 / 4;   // 0.75 - widest (tablet)
+
+      // Clamp viewport aspect ratio to our constraints
+      const clampedAspect = Math.max(minAspect, Math.min(maxAspect, viewportAspect));
+
+      // Fixed design height
+      const designHeight = 1920;
+      
+      // Calculate design width based on clamped aspect ratio
+      const designWidth = Math.round(designHeight * clampedAspect);
+
+      // Calculate scale to fit viewport
       const scaleX = viewportWidth / designWidth;
       const scaleY = viewportHeight / designHeight;
-      const newScale = Math.min(scaleX, scaleY, 1);
+      const newScale = Math.min(scaleX, scaleY, 1); // Never scale above 1:1
 
+      setCanvasDimensions({ width: designWidth, height: designHeight });
       setScale(newScale);
     };
 
-    calculateScale();
-    window.addEventListener('resize', calculateScale);
-    return () => window.removeEventListener('resize', calculateScale);
+    calculateScaleAndDimensions();
+    window.addEventListener('resize', calculateScaleAndDimensions);
+    return () => window.removeEventListener('resize', calculateScaleAndDimensions);
   }, []);
 
   // Pause stopwatch when settings open
@@ -243,16 +287,20 @@ function App() {
 
   // Initialize engine with scenario items
   useEffect(() => {
+    // Reinitialize engine to clear any previous scenario items
+    engineRef.current = new BanquetPowerEngine();
     const engine = engineRef.current;
     
     if (currentScenario) {
-      currentScenario.outlets.forEach(outlet => {
+      console.log('Initializing engine for scenario:', currentScenarioId);
+      currentScenario.outlets.forEach((outlet: PlacedItem) => {
         engine.addItem(outlet);
       });
       
-      currentScenario.equipment.forEach(equipment => {
+      currentScenario.equipment.forEach((equipment: PlacedItem) => {
         engine.addItem(equipment);
       });
+      console.log('Engine initialized with', currentScenario.outlets.length, 'outlets and', currentScenario.equipment.length, 'equipment');
     }
   }, [currentScenarioId, currentScenario]);
 
@@ -406,7 +454,7 @@ function App() {
       const toNode = allNodes.find(n => n.id === toNodeId);
       
       if (toNode) {
-        // CRITICAL FIX: Cables must flow in the direction of power (outlet Ã¢â€ â€™ equipment)
+        // CRITICAL FIX: Cables must flow in the direction of power (outlet ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ equipment)
         // If user dragged from input (tail) to output (outlet), reverse the direction
         let finalFromNodeId = draggingCable.fromNodeId;
         let finalToNodeId = toNodeId;
@@ -419,7 +467,7 @@ function App() {
           finalToNodeId = draggingCable.fromNodeId;
           finalFromPos = toNode.position;
           finalToPos = fromNode.position;
-          console.log(`[CABLE] Reversed cable direction: ${finalFromNodeId} Ã¢â€ â€™ ${finalToNodeId}`);
+          console.log(`[CABLE] Reversed cable direction: ${finalFromNodeId} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ${finalToNodeId}`);
         }
         
         // Calculate cable path for completed connection
@@ -526,8 +574,8 @@ function App() {
       // Reinitialize engine with scenario items
       engineRef.current = new BanquetPowerEngine();
       if (currentScenario) {
-        currentScenario.outlets.forEach(outlet => engineRef.current.addItem(outlet));
-        currentScenario.equipment.forEach(equipment => engineRef.current.addItem(equipment));
+        currentScenario.outlets.forEach((outlet: PlacedItem) => engineRef.current.addItem(outlet));
+        currentScenario.equipment.forEach((equipment: PlacedItem) => engineRef.current.addItem(equipment));
       }
       console.log('Reset complete');
     }
@@ -577,13 +625,12 @@ function App() {
         const newX = prev.x + deltaX;
         const newY = prev.y + deltaY;
         
-        // Calculate boundaries
-        // When zoomed 1.5x, the canvas is larger, so we can pan by (1.5 - 1) / 2 = 25% in each direction
-        // The canvas is 1080x1920 at base scale, so at 1.5x it's 1620x2880
-        // Visible area at scale is 1080x1920, so we can pan (1620-1080)/2 = 270px in X, (2880-1920)/2 = 480px in Y
-        // But we need to account for the responsive scale as well
-        const baseWidth = 1080;
-        const baseHeight = 1920;
+        // Calculate boundaries using actual canvas dimensions
+        // Canvas area height = total height - toolbars (150 + 90 = 240)
+        const TOOLBAR_HEIGHT = 150;
+        const SHOP_TOGGLE_HEIGHT = 90;
+        const baseWidth = canvasDimensions.width;
+        const baseHeight = canvasDimensions.height - TOOLBAR_HEIGHT - SHOP_TOGGLE_HEIGHT;
         const zoomScale = 1.5;
         
         // Calculate max pan distance (in screen pixels)
@@ -648,8 +695,21 @@ function App() {
     const engine = engineRef.current;
     const result = engine.validateDetailed();
     
+    console.log('=== SUBMIT VALIDATION ===');
+    console.log('In Tutorial:', inTutorial);
+    console.log('Scenario ID:', currentScenarioId);
+    console.log('Validation Result:', result);
+    console.log('Success:', result.success);
+    
     setValidationResult(result);
     setShowValidationOverlay(true);
+    
+    // If in tutorial, use tutorial validation flow
+    if (inTutorial) {
+      console.log('Using tutorial validation flow');
+      setTutorialValidationTriggered(true);
+      return; // TutorialManager will handle the rest
+    }
     
     // Calculate final time with penalties
     let finalTime = elapsedTime;
@@ -730,9 +790,145 @@ function App() {
     }
   };
 
+  // Tutorial handler functions
+  const handleReplayTutorial = async () => {
+    if (!userSession) return;
+    
+    // Reset tutorial status in database
+    await resetTutorialStatus(userSession.employeeId);
+    
+    // Start tutorial
+    setInTutorial(true);
+    setCurrentScenarioId(getFirstTutorialScenario());
+    setShowStartModal(true);
+    setSettingsOpen(false);
+    
+    // Reset game state
+    setGameStarted(false);
+    setStopwatchRunning(false);
+    setElapsedTime(0);
+    setHint1Used(false);
+    setHint2Used(false);
+    setPlacedAccessories([]);
+    setCables([]);
+    setDraggingCable(null);
+    setSelectedCableType(null);
+    
+    // Reinitialize engine
+    engineRef.current = new BanquetPowerEngine();
+    const tutorialScenario = getTutorialScenarioById(getFirstTutorialScenario());
+    if (tutorialScenario) {
+      tutorialScenario.outlets.forEach((outlet: PlacedItem) => engineRef.current.addItem(outlet));
+      tutorialScenario.equipment.forEach((equipment: PlacedItem) => engineRef.current.addItem(equipment));
+    }
+  };
+
+  const handleTutorialResetValidation = () => {
+    setTutorialValidationTriggered(false);
+    setShowValidationOverlay(false);
+    setValidationResult(null);
+    
+    // Reset game state for retry
+    setPlacedAccessories([]);
+    setCables([]);
+    setDraggingCable(null);
+    setSelectedCableType(null);
+    setGameStarted(false);
+    setStopwatchRunning(false);
+    setElapsedTime(0);
+    setShowStartModal(true);
+    
+    // Reinitialize engine
+    engineRef.current = new BanquetPowerEngine();
+    const tutorialScenario = getTutorialScenarioById(currentScenarioId);
+    if (tutorialScenario) {
+      tutorialScenario.outlets.forEach((outlet: PlacedItem) => engineRef.current.addItem(outlet));
+      tutorialScenario.equipment.forEach((equipment: PlacedItem) => engineRef.current.addItem(equipment));
+    }
+  };
+
+  const handleTutorialNextScenario = () => {
+    const nextScenario = getNextTutorialScenario(currentScenarioId);
+    if (nextScenario) {
+      setCurrentScenarioId(nextScenario);
+      
+      // Reset game state for next scenario
+      setPlacedAccessories([]);
+      setCables([]);
+      setDraggingCable(null);
+      setSelectedCableType(null);
+      setGameStarted(false);
+      setStopwatchRunning(false);
+      setElapsedTime(0);
+      setHint1Used(false);
+      setHint2Used(false);
+      setShowStartModal(true);
+      
+      // Reinitialize engine
+      engineRef.current = new BanquetPowerEngine();
+      const tutorialScenario = getTutorialScenarioById(nextScenario);
+      if (tutorialScenario) {
+        tutorialScenario.outlets.forEach((outlet: PlacedItem) => engineRef.current.addItem(outlet));
+        tutorialScenario.equipment.forEach((equipment: PlacedItem) => engineRef.current.addItem(equipment));
+      }
+    }
+  };
+
+  const handleTutorialExit = async () => {
+    if (!userSession) return;
+    
+    console.log('Exiting tutorial...');
+    
+    // Mark tutorial as completed in database (non-blocking)
+    markTutorialCompleted(userSession.employeeId).catch(err => {
+      console.error('Failed to mark tutorial as completed:', err);
+    });
+    
+    // Reset game state FIRST
+    setPlacedAccessories([]);
+    setCables([]);
+    setDraggingCable(null);
+    setSelectedCableType(null);
+    setGameStarted(false);
+    setStopwatchRunning(false);
+    setElapsedTime(0);
+    setHint1Used(false);
+    setHint2Used(false);
+    setShowValidationOverlay(false);
+    setValidationResult(null);
+    setTutorialValidationTriggered(false);
+    
+    // Exit tutorial mode
+    setInTutorial(false);
+    
+    // Load a regular scenario
+    try {
+      const randomScenario = await getRandomAvailableScenario(userSession.employeeId);
+      console.log('Random scenario:', randomScenario);
+      setCurrentScenarioId(randomScenario || 1); // Default to scenario 1 if null
+    } catch (error) {
+      console.error('Error getting random scenario:', error);
+      setCurrentScenarioId(1); // Default to scenario 1 on error
+    }
+    
+    // Show start modal for new scenario
+    setShowStartModal(true);
+    
+    // Reinitialize engine (will happen in useEffect when currentScenarioId changes)
+  };
+
   // Show login if no session
   if (!userSession) {
     return <EmployeeLogin onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Show loading if scenario not loaded yet
+  if (!currentScenario) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center">
+        <div className="text-white text-2xl">Loading scenario...</div>
+      </div>
+    );
   }
 
   // Main game UI
@@ -743,8 +939,8 @@ function App() {
         style={{
           transform: `translate(-50%, -50%) scale(${scale})`,
           transformOrigin: 'center center',
-          width: '1080px',
-          height: '1920px',
+          width: `${canvasDimensions.width}px`,
+          height: `${canvasDimensions.height}px`,
         }}
       >
         <div className="relative w-full h-full">
@@ -825,6 +1021,9 @@ function App() {
             outletUsage={outletUsage}
             isZoomedIn={isZoomedIn}
             panOffset={panOffset}
+            canvasDimensions={canvasDimensions}
+            nodesHidden={nodesHidden}
+            nodeSize={nodeSize}
           />
 
           {/* Validation Overlay */}
@@ -910,17 +1109,39 @@ function App() {
           {/* Bottom Toolbar */}
           <div className="absolute bottom-0 left-0 right-0 h-[150px] bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-t-2 border-gray-700 shadow-2xl z-[60]">
             <div className="h-full flex items-center justify-between px-12">
-              {/* Left: Settings */}
-              <button 
-                onClick={handleSettingsToggle}
-                className="group flex flex-col items-center gap-2 text-gray-300 hover:text-white transition-colors p-3"
-              >
-                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="font-semibold text-sm">Settings</span>
-              </button>
+              {/* Left: Settings and Hide Nodes */}
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={handleSettingsToggle}
+                  className="group flex flex-col items-center gap-2 text-gray-300 hover:text-white transition-colors p-3"
+                >
+                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="font-semibold text-sm">Settings</span>
+                </button>
+
+                <button 
+                  onClick={() => setNodesHidden(!nodesHidden)}
+                  className={`group flex flex-col items-center gap-2 transition-colors p-3 ${
+                    nodesHidden ? 'text-orange-500' : 'text-gray-300 hover:text-white'
+                  }`}
+                  title={nodesHidden ? "Show Nodes" : "Hide Nodes"}
+                >
+                  {nodesHidden ? (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  )}
+                  <span className="font-semibold text-sm">{nodesHidden ? 'Show Nodes' : 'Hide Nodes'}</span>
+                </button>
+              </div>
 
               {/* Center: SUBMIT Button */}
               <button 
@@ -1055,6 +1276,9 @@ function App() {
             userName={userSession.userName}
             employeeId={userSession.employeeId}
             onAdminUnlock={handleAdminUnlock}
+            nodeSize={nodeSize}
+            onNodeSizeChange={setNodeSize}
+            onReplayTutorial={handleReplayTutorial}
           />
 
           {/* Admin PIN Modal */}
@@ -1068,6 +1292,20 @@ function App() {
           {/* Admin Panel */}
           {showAdminPanel && (
             <AdminPanel onReturnToGame={handleReturnToGame} />
+          )}
+
+          {/* Tutorial Manager */}
+          {inTutorial && (
+            <TutorialManager
+              currentScenarioId={currentScenarioId}
+              placedAccessories={placedAccessories}
+              cables={cables}
+              validationPassed={validationResult?.success || false}
+              validationTriggered={tutorialValidationTriggered}
+              onResetValidation={handleTutorialResetValidation}
+              onNextScenario={handleTutorialNextScenario}
+              onExitTutorial={handleTutorialExit}
+            />
           )}
         </div>
       </div>

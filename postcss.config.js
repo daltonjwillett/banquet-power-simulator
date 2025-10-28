@@ -1,5 +1,13 @@
 export default {
   plugins: {
-    '@tailwindcss/postcss': {},
+    tailwindcss: {},
+    autoprefixer: {
+      overrideBrowserslist: [
+        'Android >= 5',
+        'Chrome >= 60',
+      ],
+      flexbox: 'no-2009',
+      grid: 'autoplace',
+    },
   },
-}
+};

@@ -27,8 +27,9 @@ export default function EmployeeLogin({ onLoginSuccess }: EmployeeLoginProps) {
         return;
     }
 
-    // Format with EID prefix
-    const employeeId = `EID${input}`;
+    // Strip leading zeros, then format with EID prefix
+    const numericId = input.replace(/^0+/, '') || '0'; // Keep at least one zero if all zeros
+    const employeeId = `EID${numericId}`;
     setIsLoading(true);
     setError('');
 
@@ -105,7 +106,7 @@ export default function EmployeeLogin({ onLoginSuccess }: EmployeeLoginProps) {
             </div>
             {input && (
               <p className="mt-2 text-sm text-gray-400">
-                Full ID: <span className="text-white font-medium">EID{input}</span>
+                Full ID: <span className="text-white font-medium">EID{input.replace(/^0+/, '') || '0'}</span>
               </p>
             )}
           </div>

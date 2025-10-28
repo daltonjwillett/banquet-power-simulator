@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Banquet Power Simulator</string>
+    <string name="title_activity_main">Banquet Power Simulator</string>
+    <string name="package_name">com.wildmethod.powersim</string>
+    <string name="custom_url_scheme">com.wildmethod.powersim</string>
+</resources>

@@ -1,8 +1,20 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './',
-})
+  build: {
+    target: 'es2015', // Lower target for older browsers
+    cssTarget: 'chrome61', // Android 9 equivalent
+    minify: 'esbuild',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+  },
+  css: {
+    postcss: './postcss.config.js',
+  },
+});

@@ -79,7 +79,7 @@ export function calculateOutletUsage(
       // ISSUE #4 FIX: If the source is an L21-30 outlet, find the doghouse it's connected to
       if (outlet.itemType === ItemType.OUTLET_L21_30) {
         // Find doghouse connected to this L21-30 outlet
-        const doghouseTrace = findConnectedDoghouse(trace.outletId, cables, allItems);
+        const doghouseTrace = findConnectedDoghouse(trace.outletId, equip.id, cables, allItems);
         
         if (doghouseTrace.doghouseId) {
           const doghouseUsage = usageMap.get(doghouseTrace.doghouseId);
@@ -92,13 +92,24 @@ export function calculateOutletUsage(
         }
       } else if (outlet.itemType === ItemType.DOGHOUSE) {
         // Direct doghouse connection
-        usage.used += amps;
+        // NOTE: For doghouse, we only track usage at the pair level, not at the general level
+        // The usage.used field remains 0 and is not used
+        
+        console.log(`[DOGHOUSE] Equipment ${equip.id} traced to doghouse ${outlet.id}`);
+        console.log(`[DOGHOUSE] Pair ID from trace: ${trace.doghousePairId}`);
+        console.log(`[DOGHOUSE] Equipment draws: ${amps.toFixed(2)}A`);
         
         if (usage.pairs && trace.doghousePairId !== undefined) {
           const pair = usage.pairs.get(trace.doghousePairId);
           if (pair) {
+            console.log(`[DOGHOUSE] Adding ${amps.toFixed(2)}A to pair ${trace.doghousePairId} (was ${pair.used.toFixed(2)}A)`);
             pair.used += amps;
+            console.log(`[DOGHOUSE] Pair ${trace.doghousePairId} now has ${pair.used.toFixed(2)}A`);
+          } else {
+            console.warn(`[DOGHOUSE] Pair ${trace.doghousePairId} not found in usage map!`);
           }
+        } else {
+          console.warn(`[DOGHOUSE] Missing pairs map or pairId undefined! pairs=${!!usage.pairs}, pairId=${trace.doghousePairId}`);
         }
       } else {
         // Regular outlet
@@ -107,6 +118,10 @@ export function calculateOutletUsage(
     }
   });
   
+  // NOTE: Second pass removed - L21-30 outlets don't track usage themselves
+  // The doghouse tracks usage per pair, not at the outlet level
+  // This was causing confusion because one L21-30 can feed multiple doghouse pairs
+  /*
   // Second pass: For each L21-30 outlet, find which doghouse and pair it's connected to
   outlets.forEach(outlet => {
     if (outlet.itemType === ItemType.OUTLET_L21_30) {
@@ -131,6 +146,7 @@ export function calculateOutletUsage(
       }
     }
   });
+  */
   
   return usageMap;
 }
@@ -146,17 +162,22 @@ interface DoghouseTraceResult {
 }
 
 /**
- * NEW: Traces from an L21-30 outlet to find the connected doghouse
+ * NEW: Traces from an L21-30 outlet to find the connected doghouse and which pair the equipment uses
+ * FIXED: Now traces forward from doghouse through the specific path to the equipment
  */
 function findConnectedDoghouse(
   outletId: string,
+  equipmentId: string,
   cables: Cable[],
   allItems: Map<string, PlacedItem>
 ): DoghouseTraceResult {
   const result: DoghouseTraceResult = { doghouseId: null };
   
+  console.log(`[DOGHOUSE TRACE] Finding doghouse for equipment ${equipmentId} connected via outlet ${outletId}`);
+  
   // Find cables that connect FROM this outlet
   const outletCables = cables.filter(c => c.fromNodeId.startsWith(outletId + '-'));
+  console.log(`[DOGHOUSE TRACE] Found ${outletCables.length} cables from outlet`);
   
   for (const cable of outletCables) {
     if (!cable.toNodeId) continue;
@@ -165,33 +186,105 @@ function findConnectedDoghouse(
     const [toItemId] = cable.toNodeId.split('-');
     const toItem = allItems.get(toItemId);
     
+    console.log(`[DOGHOUSE TRACE] Cable ${cable.id} goes to item ${toItemId}, type: ${toItem?.itemType}`);
+    
     if (toItem && toItem.itemType === ItemType.DOGHOUSE) {
       // Found the doghouse!
       result.doghouseId = toItemId;
+      console.log(`[DOGHOUSE TRACE] ✓ Found doghouse: ${toItemId}`);
       
-      // Determine which pair by looking at the from node of the doghouse's outputs
-      // We need to trace forward through the doghouse to find which pair is being used
-      const doghouseDef = ITEM_DEFINITIONS[toItem.itemType];
+      // Now we need to trace FORWARD from this equipment back to find which doghouse output it connects through
+      // We'll do a reverse trace: start from equipment, work backwards until we hit the doghouse,
+      // and see which output node we exit from
+      const pairId = traceEquipmentToDoghouseOutput(equipmentId, toItemId, cables, allItems);
       
-      // Find which output node on the doghouse this equipment chain goes through
-      const outputCables = cables.filter(c => c.fromNodeId.startsWith(toItemId + '-out'));
-      for (const outCable of outputCables) {
-        if (!outCable.fromNodeId) continue;
-        
-        const [, nodeId] = outCable.fromNodeId.split('-');
-        const outputNode = doghouseDef.nodes.find(n => n.id === nodeId);
-        
-        if (outputNode && outputNode.pairId) {
-          result.pairId = outputNode.pairId;
-          break;
-        }
+      if (pairId !== null) {
+        result.pairId = pairId;
+        console.log(`[DOGHOUSE TRACE] ✓ Equipment traces to pair ${pairId}`);
+      } else {
+        console.warn(`[DOGHOUSE TRACE] ⚠️ Could not determine pair for equipment ${equipmentId}`);
       }
       
       break;
     }
   }
   
+  console.log(`[DOGHOUSE TRACE] Final result: doghouseId=${result.doghouseId}, pairId=${result.pairId}`);
   return result;
+}
+
+/**
+ * Traces from equipment backwards to find which doghouse output node it's connected through
+ */
+function traceEquipmentToDoghouseOutput(
+  equipmentId: string,
+  doghouseId: string,
+  cables: Cable[],
+  allItems: Map<string, PlacedItem>
+): number | null {
+  const equipment = allItems.get(equipmentId);
+  if (!equipment) return null;
+  
+  const equipDef = ITEM_DEFINITIONS[equipment.itemType];
+  
+  // Start from the equipment's tail-in node
+  let currentNodeId = equipDef.watts ? `${equipmentId}-tail-in` : `${equipmentId}-in`;
+  
+  console.log(`[PAIR TRACE] Tracing ${equipmentId} backwards to find doghouse pair`);
+  
+  const visited = new Set<string>();
+  
+  while (true) {
+    if (visited.has(currentNodeId)) {
+      console.warn(`[PAIR TRACE] Circular connection at ${currentNodeId}`);
+      return null;
+    }
+    visited.add(currentNodeId);
+    
+    // Find cable that connects TO this node
+    const cable = cables.find(c => c.toNodeId === currentNodeId);
+    if (!cable || !cable.fromNodeId) {
+      console.log(`[PAIR TRACE] No cable found connecting to ${currentNodeId}`);
+      return null;
+    }
+    
+    console.log(`[PAIR TRACE] Found cable from ${cable.fromNodeId} to ${cable.toNodeId}`);
+    
+    const [fromItemId, ...fromNodeParts] = cable.fromNodeId.split('-');
+    const fromNodeId = fromNodeParts.join('-');
+    
+    // Check if this is the doghouse
+    if (fromItemId === doghouseId) {
+      // We've reached the doghouse! The fromNodeId tells us which output
+      const doghouseDef = ITEM_DEFINITIONS[ItemType.DOGHOUSE];
+      const outputNode = doghouseDef.nodes.find(n => n.id === fromNodeId);
+      
+      if (outputNode && outputNode.pairId) {
+        console.log(`[PAIR TRACE] ✓ Found doghouse output: ${fromNodeId}, pairId: ${outputNode.pairId}`);
+        return outputNode.pairId;
+      } else {
+        console.warn(`[PAIR TRACE] Doghouse node ${fromNodeId} has no pairId`);
+        return null;
+      }
+    }
+    
+    // Move to the input node of the from item
+    const fromItem = allItems.get(fromItemId);
+    if (!fromItem) {
+      console.log(`[PAIR TRACE] From item ${fromItemId} not found`);
+      return null;
+    }
+    
+    const fromItemDef = ITEM_DEFINITIONS[fromItem.itemType];
+    const inputNode = fromItemDef.nodes.find(n => n.type === 'input');
+    if (!inputNode) {
+      console.log(`[PAIR TRACE] No input node on ${fromItemId}`);
+      return null;
+    }
+    
+    currentNodeId = `${fromItemId}-${inputNode.id}`;
+    console.log(`[PAIR TRACE] Moving to ${currentNodeId}`);
+  }
 }
 
 /**
@@ -273,12 +366,12 @@ function traceToOutlet(
     
     const hasOnlyOutputs = fromItemDef.nodes.every(n => n.type === 'output');
     if (hasOnlyOutputs) {
-      console.log(`[TRACE] âœ“ Found outlet: ${fromItemId}`);
+      console.log(`[TRACE] Ã¢Å“â€œ Found outlet: ${fromItemId}`);
       result.outletId = fromItemId;
       
       if (fromItem.itemType === ItemType.DOGHOUSE && fromNode.pairId) {
         result.doghousePairId = fromNode.pairId;
-        console.log(`[TRACE] âœ“ Doghouse pair: ${fromNode.pairId}`);
+        console.log(`[TRACE] Ã¢Å“â€œ Doghouse pair: ${fromNode.pairId}`);
       }
       
       break;

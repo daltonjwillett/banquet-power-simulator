@@ -1,17 +1,22 @@
 // src/components/NodeVisualization.tsx
 
 import type { PlacedItem } from '../types';
-import type { Node, DraggingCable } from '../types/cable';
+import type { Node, DraggingCable, Cable } from '../types/cable';
 import { CABLE_CONSTANTS } from '../types/cable';
 import { getNodeColor } from '../utils/cableHelpers';
+import { ITEM_DEFINITIONS } from '../data/itemDefinitions';
 
 interface NodeVisualizationProps {
   nodes: Node[];
   draggingCable: DraggingCable | null;
   selectedCableType: 'edison' | 'flat-wire' | null;
   allItems: Map<string, PlacedItem>; // NEW: Need this for color calculation
+  cables: Cable[]; // NEW: Need this to check if input nodes are connected
   scale: number;
   onNodeClick?: (node: Node) => void;
+  onNodeTouch?: (node: Node) => void; // NEW: Separate touch handler for mobile
+  nodesHidden?: boolean; // NEW: Hide all nodes when true
+  nodeSize?: 'small' | 'large'; // NEW: Node size setting
 }
 
 export default function NodeVisualization({
@@ -19,14 +24,27 @@ export default function NodeVisualization({
   draggingCable,
   selectedCableType,
   allItems,
+  cables,
   onNodeClick,
+  onNodeTouch,
+  nodesHidden = false,
+  nodeSize = 'large',
 }: NodeVisualizationProps) {
-  // ALWAYS show nodes now
+  // Hide ALL nodes if nodesHidden is true
+  if (nodesHidden) {
+    return null;
+  }
+  
+  // ALWAYS show nodes now (unless nodesHidden)
   const shouldShowNodes = true;
   
   if (!shouldShowNodes) {
     return null;
   }
+
+  // Calculate radius based on node size setting
+  const baseRadius = CABLE_CONSTANTS.NODE_RADIUS; // 30
+  const radius = nodeSize === 'small' ? baseRadius * 0.5 : baseRadius; // 15 for small, 30 for large
 
   // Filter to show appropriate nodes based on state
   const visibleNodes = nodes.filter(node => {
@@ -34,25 +52,50 @@ export default function NodeVisualization({
     // Only show the tail-end nodes (tail-in), not the equipment connection nodes (in)
     const item = allItems.get(node.itemId);
     if (item && node.type === 'input') {
-      // Check if this node is a tail input (show it)
+      // Check if this node is a tail input (show it if not connected)
       if (node.id.includes('tail-in')) {
-        return true; // Show tail input nodes
+        // Check if this tail is already connected
+        const isConnected = cables.some(cable => 
+          cable.toNodeId === node.id && cable.fromNodeId && cable.toNodeId
+        );
+        // Show if not connected, or if dragging a cable (to allow reconnection)
+        return !isConnected || !!draggingCable;
       }
-      // Check if this node is an equipment input (hide it if equipment has a tail)
-      if (node.id.endsWith('-in')) {
-        // This is likely the hidden equipment connection node
-        // We'll still show it during cable dragging if compatible
-        if (draggingCable) {
-          // During dragging, show if compatible
-          const fromNode = nodes.find(n => n.id === draggingCable.fromNodeId);
-          if (fromNode && fromNode.type === 'output' && node.type === 'input') {
-            return true;
+      
+      // Check if this node is an accessory input node (ends with '-in' but NOT 'tail-in')
+      if (node.id.endsWith('-in') && !node.id.includes('tail-in')) {
+        // First check: Does this item have a tail? If yes, this is a hidden equipment node - NEVER show it
+        const itemDef = ITEM_DEFINITIONS[item.itemType];
+        const hasTail = itemDef.nodes.some(n => n.id.includes('tail-in'));
+        
+        if (hasTail) {
+          // This is an equipment's hidden connection node - hide it always (unless dragging for compatibility check)
+          if (draggingCable) {
+            const fromNode = nodes.find(n => n.id === draggingCable.fromNodeId);
+            if (fromNode && fromNode.type === 'output' && node.type === 'input') {
+              return true;
+            }
           }
           return false;
         }
-        // Not dragging - hide this node
-        return false;
+        
+        // This is an accessory input node (no tail) - show it if not connected
+        const isConnected = cables.some(cable => 
+          cable.toNodeId === node.id && cable.fromNodeId && cable.toNodeId
+        );
+        
+        // Show if not connected, or if actively dragging a cable
+        return !isConnected || !!draggingCable;
       }
+      
+      // Any other input node - hide unless dragging for compatibility
+      if (draggingCable) {
+        const fromNode = nodes.find(n => n.id === draggingCable.fromNodeId);
+        if (fromNode && fromNode.type === 'output' && node.type === 'input') {
+          return true;
+        }
+      }
+      return false;
     }
     
     if (draggingCable) {
@@ -75,8 +118,25 @@ export default function NodeVisualization({
     } else if (selectedCableType) {
       return node.type === 'output';
     } else {
-      // Show tail input nodes when nothing is selected
-      return node.type === 'input' && node.id.includes('tail-in');
+      // Show input nodes (tails and unconnected accessory inputs) when nothing is selected
+      if (node.type === 'input') {
+        // Show equipment tails if not connected
+        if (node.id.includes('tail-in')) {
+          const isConnected = cables.some(cable => 
+            cable.toNodeId === node.id && cable.fromNodeId && cable.toNodeId
+          );
+          return !isConnected;
+        }
+        
+        // Show accessory input nodes if not connected
+        if (node.id.endsWith('-in') && !node.id.includes('tail-in')) {
+          const isConnected = cables.some(cable => 
+            cable.toNodeId === node.id && cable.fromNodeId && cable.toNodeId
+          );
+          return !isConnected;
+        }
+      }
+      return false;
     }
   });
 
@@ -85,7 +145,6 @@ export default function NodeVisualization({
       {visibleNodes.map(node => {
         // Use the new color system that handles doghouse pairs
         const color = getNodeColor(node, allItems);
-        const radius = CABLE_CONSTANTS.NODE_RADIUS;
         const strokeWidth = CABLE_CONSTANTS.NODE_STROKE_WIDTH;
 
         const isEquipmentTail = node.type === 'input' && node.id.includes('tail-in');
@@ -99,7 +158,8 @@ export default function NodeVisualization({
             }}
             onTouchStart={(e) => {
               e.stopPropagation();
-              onNodeClick?.(node);
+              e.preventDefault(); // Prevent touch from triggering click
+              onNodeTouch?.(node);
             }}
             style={{ 
               cursor: 'pointer',
@@ -159,7 +219,7 @@ export default function NodeVisualization({
             <circle
               cx={node.position.x}
               cy={node.position.y}
-              r={radius * 3.5}
+              r={radius * 2}
               fill="transparent"
               style={{ pointerEvents: 'all', cursor: 'pointer', touchAction: 'none' }}
               onClick={(e) => {
@@ -168,7 +228,8 @@ export default function NodeVisualization({
               }}
               onTouchStart={(e) => {
                 e.stopPropagation();
-                onNodeClick?.(node);
+                e.preventDefault(); // Prevent touch from triggering click
+                onNodeTouch?.(node);
               }}
             />
           </g>

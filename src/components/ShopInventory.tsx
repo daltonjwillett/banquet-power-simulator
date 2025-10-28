@@ -60,7 +60,7 @@ export default function ShopInventory({
     <div
       className="bg-gradient-to-b from-gray-800 to-gray-900 border-t-2 border-gray-700 shadow-2xl transition-all duration-300 ease-in-out relative z-50"
       style={{
-        height: isOpen ? '720px' : '0px', // Increased from 600px to 720px
+        height: isOpen ? '850px' : '0px', // Increased from 720px to 850px for better vertical spacing
       }}
     >
       {/* Toggle Bar with Cable Buttons - Always Visible - 130px height */}
@@ -125,7 +125,7 @@ export default function ShopInventory({
 
       {/* Shop Content - 3 columns for accessories, NO SCROLLING */}
       {isOpen && (
-        <div className="h-[590px] p-6 relative z-50">
+        <div className="h-[720px] p-6 relative z-50">
           {/* Accessories Section */}
           <div>
             <div className="flex items-center gap-3 mb-4">

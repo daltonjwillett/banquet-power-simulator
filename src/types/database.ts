@@ -14,16 +14,19 @@ export interface Database {
           employee_id: string
           name: string
           created_at: string
+          tutorial_completed: boolean
         }
         Insert: {
           employee_id: string
           name: string
           created_at?: string
+          tutorial_completed?: boolean
         }
         Update: {
           employee_id?: string
           name?: string
           created_at?: string
+          tutorial_completed?: boolean
         }
         Relationships: []
       }

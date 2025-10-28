@@ -84,7 +84,7 @@ export class BanquetPowerEngine {
           toNodeId: tailInNode,
         });
         
-        console.log(`Added virtual tail connection: ${equipInNode} Ã¢â€ â€™ ${tailInNode}`);
+        console.log(`Added virtual tail connection: ${equipInNode} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${tailInNode}`);
       }
     }
   }
@@ -216,7 +216,112 @@ export class BanquetPowerEngine {
       }
     }
 
+    // CRITICAL: Check doghouse pair overloads across ALL equipment
+    // A doghouse might have multiple equipment items drawing from the same pair
+    const doghouseUsage = this.calculateDoghouseUsage();
+    
+    for (const [doghouseId, pairMap] of doghouseUsage) {
+      const overloadedPairs = new Set<number>();
+      
+      // First pass: identify which pairs are overloaded
+      for (const [pairId, usage] of pairMap) {
+        if (usage > 30) {
+          overloadedPairs.add(pairId);
+          result.success = false;
+          result.violations.push({
+            itemId: doghouseId,
+            reason: `Doghouse pair ${pairId} overloaded: ${usage.toFixed(1)}A / 30A`,
+          });
+        }
+      }
+      
+      // If any pair is overloaded, check which equipment uses those pairs
+      if (overloadedPairs.size > 0) {
+        // Get all equipment items
+        const equipmentItems = Array.from(this.items.values()).filter(item => {
+          const def = ITEM_DEFINITIONS[item.itemType];
+          return def.watts !== undefined;
+        });
+        
+        // For each equipment, check if it goes through an overloaded pair
+        for (const equipment of equipmentItems) {
+          const equipmentNodeId = `${equipment.id}-tail-in`;
+          const chain = this.traceBackToOutlet(equipmentNodeId);
+          
+          // Check if this chain goes through the doghouse on an overloaded pair
+          let usesOverloadedPair = false;
+          for (const link of chain) {
+            if (link.itemId === doghouseId && 
+                link.node.pairId !== undefined && 
+                overloadedPairs.has(link.node.pairId)) {
+              usesOverloadedPair = true;
+              break;
+            }
+          }
+          
+          // If this equipment uses an overloaded pair, move its chain to invalid
+          if (usesOverloadedPair) {
+            const chainItemIds = chain.map(link => link.itemId);
+            chainItemIds.push(equipment.id);
+            
+            // Remove from validChains
+            for (let i = 0; i < result.validChains.length; i++) {
+              if (JSON.stringify(result.validChains[i]) === JSON.stringify(chainItemIds)) {
+                result.validChains.splice(i, 1);
+                break;
+              }
+            }
+            
+            // Add to invalidChains if not already there
+            if (!result.invalidChains.some(c => JSON.stringify(c) === JSON.stringify(chainItemIds))) {
+              result.invalidChains.push(chainItemIds);
+            }
+          }
+        }
+        
+        // Ensure doghouse itself is in invalid chains
+        const doghouseInInvalid = result.invalidChains.some(chain => chain.includes(doghouseId));
+        if (!doghouseInInvalid) {
+          result.invalidChains.push([doghouseId]);
+        }
+      }
+    }
+
     return result;
+  }
+
+  // Calculate total usage on each doghouse pair across ALL equipment
+  private calculateDoghouseUsage(): Map<string, Map<number, number>> {
+    const doghouseUsage = new Map<string, Map<number, number>>();
+    
+    // Get all equipment items
+    const equipmentItems = Array.from(this.items.values()).filter(item => {
+      const def = ITEM_DEFINITIONS[item.itemType];
+      return def.watts !== undefined;
+    });
+    
+    // For each equipment, trace back and accumulate doghouse usage
+    for (const equipment of equipmentItems) {
+      const equipmentDef = ITEM_DEFINITIONS[equipment.itemType];
+      const watts = equipmentDef.watts || 0;
+      const amps = watts / 120;
+      
+      const equipmentNodeId = `${equipment.id}-tail-in`;
+      const chain = this.traceBackToOutlet(equipmentNodeId);
+      
+      // Look for doghouses in the chain
+      for (const link of chain) {
+        if (link.itemType === ItemType.DOGHOUSE && link.node.pairId !== undefined) {
+          if (!doghouseUsage.has(link.itemId)) {
+            doghouseUsage.set(link.itemId, new Map([[1, 0], [2, 0], [3, 0]]));
+          }
+          const pairMap = doghouseUsage.get(link.itemId)!;
+          pairMap.set(link.node.pairId, (pairMap.get(link.node.pairId) || 0) + amps);
+        }
+      }
+    }
+    
+    return doghouseUsage;
   }
 
   // Original validate method (kept for backwards compatibility)
@@ -246,7 +351,7 @@ export class BanquetPowerEngine {
       const connection = this.connections.find(c => c.toNodeId === currentNodeId);
       if (!connection) break;
 
-      // Split only at first dash (e.g., "equipment1-tail-in" â†’ ["equipment1", "tail-in"])
+      // Split only at first dash (e.g., "equipment1-tail-in" Ã¢â€ â€™ ["equipment1", "tail-in"])
       const dashIndex = connection.fromNodeId.indexOf('-');
       if (dashIndex === -1) break;
       const itemId = connection.fromNodeId.substring(0, dashIndex);

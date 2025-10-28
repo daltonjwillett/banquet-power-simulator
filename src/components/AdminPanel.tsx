@@ -126,10 +126,15 @@ export default function AdminPanel({ onReturnToGame }: AdminPanelProps) {
   const handleAddUser = async () => {
     if (!newEmployeeId.trim() || !newName.trim()) return;
 
+    // Add EID prefix if not already present
+    const employeeId = newEmployeeId.trim().startsWith('EID') 
+      ? newEmployeeId.trim() 
+      : `EID${newEmployeeId.trim()}`;
+
     try {
       const { error } = await supabase
         .from('users')
-        .insert([{ employee_id: newEmployeeId.trim(), name: newName.trim() }]);
+        .insert([{ employee_id: employeeId, name: newName.trim() }]);
 
       if (error) throw error;
 
@@ -526,7 +531,7 @@ export default function AdminPanel({ onReturnToGame }: AdminPanelProps) {
 
       {/* Delete User Confirmation */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gradient-to-b from-black/70 to-black/90 z-50 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-gray-900 to-black rounded-3xl border border-gray-800 p-12 max-w-4xl w-full">
             <div className="flex items-center gap-6 mb-8">
               <Icon path={mdiAlertCircle} size={3} className="text-red-500" />
@@ -555,7 +560,7 @@ export default function AdminPanel({ onReturnToGame }: AdminPanelProps) {
 
       {/* Delete Entry Confirmation */}
       {confirmDeleteEntry && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gradient-to-b from-black/70 to-black/90 z-50 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-gray-900 to-black rounded-3xl border border-gray-800 p-12 max-w-4xl w-full">
             <div className="flex items-center gap-6 mb-8">
               <Icon path={mdiAlertCircle} size={3} className="text-red-500" />
@@ -584,7 +589,7 @@ export default function AdminPanel({ onReturnToGame }: AdminPanelProps) {
 
       {/* Reset Leaderboard Confirmation */}
       {showResetConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gradient-to-b from-black/70 to-black/90 z-50 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-gray-900 to-black rounded-3xl border border-gray-800 p-12 max-w-4xl w-full">
             <div className="flex items-center gap-6 mb-8">
               <Icon path={mdiAlertCircle} size={3} className="text-red-500" />

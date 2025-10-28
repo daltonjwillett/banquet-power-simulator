@@ -9,6 +9,9 @@ interface SettingsPanelProps {
   userName: string;
   employeeId: string;
   onAdminUnlock: () => void;
+  nodeSize: 'small' | 'large';
+  onNodeSizeChange: (size: 'small' | 'large') => void;
+  onReplayTutorial: () => void;
 }
 
 export default function SettingsPanel({
@@ -18,6 +21,9 @@ export default function SettingsPanel({
   userName,
   employeeId,
   onAdminUnlock,
+  nodeSize,
+  onNodeSizeChange,
+  onReplayTutorial,
 }: SettingsPanelProps) {
   const [savedClickCount, setSavedClickCount] = useState(0);
   const clickTimeoutRef = useRef<number | null>(null);
@@ -88,6 +94,53 @@ export default function SettingsPanel({
                 Logged in and ready to train!
               </p>
             </div>
+          </div>
+
+          {/* Node Size Setting */}
+          <div className="bg-gray-700/30 rounded-2xl p-8 border border-gray-600">
+            <h3 className="text-2xl font-semibold text-white mb-6">Node Size</h3>
+            <p className="text-base text-gray-400 mb-6">
+              Adjust the size of connection nodes on the canvas
+            </p>
+            
+            <div className="flex gap-4">
+              <button
+                onClick={() => onNodeSizeChange('small')}
+                className={`flex-1 px-6 py-5 rounded-xl text-lg font-semibold transition-all ${
+                  nodeSize === 'small'
+                    ? 'bg-gradient-to-r from-[#b55609] to-[#d67a2e] text-white shadow-lg shadow-orange-500/30'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Small
+              </button>
+              
+              <button
+                onClick={() => onNodeSizeChange('large')}
+                className={`flex-1 px-6 py-5 rounded-xl text-lg font-semibold transition-all ${
+                  nodeSize === 'large'
+                    ? 'bg-gradient-to-r from-[#b55609] to-[#d67a2e] text-white shadow-lg shadow-orange-500/30'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Large
+              </button>
+            </div>
+          </div>
+
+          {/* Replay Tutorial Section */}
+          <div className="bg-gray-700/30 rounded-2xl p-8 border border-gray-600">
+            <h3 className="text-2xl font-semibold text-white mb-4">Tutorial</h3>
+            <p className="text-base text-gray-400 mb-6">
+              Replay the tutorial to refresh your skills and learn the basics again.
+            </p>
+            
+            <button
+              onClick={onReplayTutorial}
+              className="w-full px-6 py-5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-lg font-semibold rounded-xl hover:from-blue-500 hover:to-blue-600 active:scale-95 transition-all shadow-lg hover:shadow-blue-500/30"
+            >
+              Replay Tutorial
+            </button>
           </div>
 
           {/* App Info */}

@@ -34,7 +34,7 @@ export default function AdminPinModal({ onCorrectPin, onClose }: AdminPinModalPr
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
       <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl shadow-2xl border border-gray-800 w-full max-w-md p-8 relative">
         {/* Close Button */}
         <button

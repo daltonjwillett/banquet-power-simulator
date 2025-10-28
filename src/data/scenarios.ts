@@ -11,8 +11,8 @@ const CANVAS_WIDTH = 1080;
 
 // Safe boundaries (avoid edges and toolbars)
 const BOUNDARY_PADDING = {
-  left: 80,   // Left edge for outlets
-  right: 80,  // Right edge for outlets
+  left: 70,   // Left edge for outlets
+  right: 70,  // Right edge for outlets
   top: 240,   // Top padding - avoid status bar (80px notch + 100px status bar + 20px buffer)
   bottom: 200, // Bottom padding - avoid toolbar (150px toolbar + 50px buffer)
 };
@@ -68,9 +68,9 @@ function placeEquipmentOnTable(
   if (count >= 6) {
     dynamicOffset = 300;
   } else if (count === 5) {
-    dynamicOffset = 240;
+    dynamicOffset = 260;
   } else if (count === 4) {
-    dynamicOffset = 170;
+    dynamicOffset = 190;
   }
   
   if (count === 0) return items;
@@ -132,7 +132,7 @@ function placeEquipmentOnTable(
     });
   } else {
     // Four or more items - distribute evenly with balanced spacing
-    const totalWidth = table.width * 1.3; // Increased from 1.2 to 1.3 for better spacing
+    const totalWidth = table.width * 1.2; // Increased from 1.2 to 1.3 for better spacing
     const spacing = totalWidth / (count + 1);
     
     equipmentTypes.forEach((type, index) => {

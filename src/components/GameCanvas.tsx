@@ -34,6 +34,9 @@ interface GameCanvasProps {
   outletUsage?: Map<string, OutletUsage>;
   isZoomedIn?: boolean;
   panOffset?: { x: number; y: number };
+  canvasDimensions: { width: number; height: number }; // NEW: Dynamic canvas dimensions
+  nodesHidden?: boolean; // NEW: Hide all nodes for easier accessory manipulation
+  nodeSize?: 'small' | 'large'; // NEW: Node size setting
 }
 
 export default function GameCanvas({
@@ -58,10 +61,19 @@ export default function GameCanvas({
   outletUsage,
   isZoomedIn = false,
   panOffset = { x: 0, y: 0 },
+  canvasDimensions,
+  nodesHidden = false,
+  nodeSize = 'large',
 }: GameCanvasProps) {
   // Mark handlers as used (they're called from App.tsx trash bin)
   void onAccessoryRemove;
   void onCableRemove;
+  void panOffset; // Mark as used - passed as prop but used in coordinate calculations
+  
+  // Design dimensions - scenarios are designed for these dimensions
+  // SVG viewBox uses these dimensions, and SVG handles scaling automatically
+  const DESIGN_WIDTH = 1080;
+  const DESIGN_HEIGHT = 1680;
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -73,7 +85,7 @@ export default function GameCanvas({
 
   if (!scenario) {
     return (
-      <div className="w-[1080px] h-[1920px] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+      <div className="bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center" style={{ width: `${canvasDimensions.width}px`, height: `${canvasDimensions.height}px` }}>
         <div className="text-center">
           <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-300 animate-pulse"></div>
           <p className="text-2xl font-semibold text-gray-500">Loading scenario...</p>
@@ -181,34 +193,44 @@ export default function GameCanvas({
     
     const rect = canvasRef.current.getBoundingClientRect();
     
-    // Get position relative to canvas
-    let x = (clientX - rect.left) / scale;
-    let y = (clientY - rect.top) / scale;
-    
-    // If zoomed in, we need to account for the zoom transform and pan offset
-    if (isZoomedIn) {
-      const zoomScale = 1.5;
-      const canvasCenter = {
-        x: rect.width / (2 * scale),
-        y: rect.height / (2 * scale),
-      };
-      
-      // Reverse the pan offset (convert screen pixels to canvas pixels)
-      const panX = panOffset.x / (scale * zoomScale);
-      const panY = panOffset.y / (scale * zoomScale);
-      
-      // Adjust for zoom: position relative to center, then divide by zoom, then add center back
-      x = (x - canvasCenter.x) / zoomScale + canvasCenter.x - panX;
-      y = (y - canvasCenter.y) / zoomScale + canvasCenter.y - panY;
+    if (!isZoomedIn) {
+      // Not zoomed: Convert screen coordinates to SVG viewBox (design) coordinates
+      // rect is the actual canvas size in screen pixels
+      // SVG viewBox is DESIGN_WIDTH x DESIGN_HEIGHT
+      const x = ((clientX - rect.left) / rect.width) * DESIGN_WIDTH;
+      const y = ((clientY - rect.top) / rect.height) * DESIGN_HEIGHT;
+      return { x, y };
     }
+    
+    // When zoomed, the parent div has scale(1.5) with transform-origin: center center
+    // This means the rect is 1.5x larger and centered
+    const zoomScale = 1.5;
+    
+    // Find the center of the rect in screen coordinates
+    // Note: rect already includes the pan offset since getBoundingClientRect gives final position
+    const rectCenterX = rect.left + rect.width / 2;
+    const rectCenterY = rect.top + rect.height / 2;
+    
+    // Get position relative to center in screen pixels
+    const relativeX = clientX - rectCenterX;
+    const relativeY = clientY - rectCenterY;
+    
+    // Divide by zoom to get position relative to unzoomed canvas
+    const unzoomedRelativeX = relativeX / zoomScale;
+    const unzoomedRelativeY = relativeY / zoomScale;
+    
+    // Convert to SVG viewBox coordinates
+    // The unzoomed canvas would be rect.width/zoomScale pixels wide, mapping to DESIGN_WIDTH
+    const x = (DESIGN_WIDTH / 2) + (unzoomedRelativeX / (rect.width / zoomScale)) * DESIGN_WIDTH;
+    const y = (DESIGN_HEIGHT / 2) + (unzoomedRelativeY / (rect.height / zoomScale)) * DESIGN_HEIGHT;
     
     return { x, y };
   };
 
   const clampToCanvas = (x: number, y: number) => {
     const padding = 50;
-    const maxX = canvasRef.current?.clientWidth || 1080;
-    const maxY = canvasRef.current?.clientHeight || 1690;
+    const maxX = DESIGN_WIDTH;
+    const maxY = DESIGN_HEIGHT;
     
     return {
       x: Math.max(padding, Math.min(maxX - padding, x)),
@@ -396,7 +418,7 @@ export default function GameCanvas({
 
   const handleNodeClick = (node: Node) => {
     if (node.type === 'input') {
-      // Check if this tail node already has a cable connected
+      // Check if this input node already has a cable connected
       const hasConnectedCable = cables.some(cable => 
         cable.toNodeId === node.id && cable.fromNodeId && cable.toNodeId
       );
@@ -406,7 +428,7 @@ export default function GameCanvas({
         return;
       }
       
-      // This is a tail node - determine cable type needed and START dragging immediately
+      // This is an input node (equipment tail or accessory input) - determine cable type needed
       let cableType: 'edison' | 'flat-wire' = 'edison';
       
       // Special twist-lock connections use flat-wire appearance
@@ -416,7 +438,7 @@ export default function GameCanvas({
         cableType = 'flat-wire';
       }
       
-      // Start dragging FROM the input node (tail)
+      // Start dragging FROM the input node
       onCableDragStart(cableType, node.id, node.position);
       return;
     }
@@ -428,6 +450,32 @@ export default function GameCanvas({
     
     // Start cable from this OUTPUT node
     onCableDragStart(selectedCableType, node.id, node.position);
+  };
+
+  // NEW: Separate touch handler for nodes that immediately starts dragging (mobile-friendly)
+  const handleNodeTouch = (node: Node) => {
+    if (node.type === 'input') {
+      // Same logic as handleNodeClick for input nodes
+      handleNodeClick(node);
+      return;
+    }
+    
+    // This is an output node (outlet or accessory)
+    if (node.type !== 'output') return;
+    
+    // For touch on output nodes, determine cable type and start dragging immediately
+    // No need to select cable type first on mobile!
+    let cableType: 'edison' | 'flat-wire' = 'edison';
+    
+    // Determine cable type based on connection type
+    if (node.connectionType === ConnectionType.L21_30 ||
+        node.connectionType === ConnectionType.L6_20 ||
+        node.connectionType === ConnectionType.L6_30) {
+      cableType = 'flat-wire';
+    }
+    
+    // Start dragging FROM the output node
+    onCableDragStart(cableType, node.id, node.position);
   };
 
   const shouldShowLabel = (itemId: string, itemType: ItemType): boolean => {
@@ -456,7 +504,7 @@ export default function GameCanvas({
   };
 
   return (
-    <div className="relative w-[1080px] h-[1920px] bg-white overflow-hidden shadow-2xl">
+    <div className="relative bg-white overflow-hidden shadow-2xl" style={{ width: `${canvasDimensions.width}px`, height: `${canvasDimensions.height}px` }}>
       <div className="h-[80px] bg-gradient-to-b from-black to-gray-900" />
 
       <div
@@ -490,8 +538,8 @@ export default function GameCanvas({
           // Calculate final width and subtract 25px to prevent overflow
           const finalWidth = (table.width * widthMultiplier) - 25;
           
-          // Ensure table doesn't go off screen (max canvas width is 1080)
-          const maxAllowedWidth = 1080 - table.x - 80; // 80px right padding
+          // Ensure table doesn't go off screen (use design width)
+          const maxAllowedWidth = DESIGN_WIDTH - table.x - 80; // 80px right padding
           const clampedWidth = Math.min(finalWidth, maxAllowedWidth);
           
           return (
@@ -499,10 +547,10 @@ export default function GameCanvas({
               key={table.id}
               className="absolute bg-gradient-to-br from-amber-50 to-amber-100 border-4 border-amber-700 rounded-2xl shadow-lg pointer-events-none"
               style={{
-                left: `${table.x}px`,
-                top: `${table.y}px`,
-                width: `${clampedWidth}px`,
-                height: `${table.height}px`,
+                left: `${(table.x / DESIGN_WIDTH) * 100}%`,
+                top: `${(table.y / DESIGN_HEIGHT) * 100}%`,
+                width: `${(clampedWidth / DESIGN_WIDTH) * 100}%`,
+                height: `${(table.height / DESIGN_HEIGHT) * 100}%`,
               }}
             >
               <div className="absolute inset-0 opacity-10 rounded-xl" 
@@ -531,7 +579,7 @@ export default function GameCanvas({
             height: '100%',
             pointerEvents: 'none',
           }}
-          viewBox="0 0 1080 1690"
+          viewBox={`0 0 ${DESIGN_WIDTH} ${DESIGN_HEIGHT}`}
           preserveAspectRatio="none"
         >
           <EquipmentTails
@@ -549,7 +597,7 @@ export default function GameCanvas({
             width: '100%',
             height: '100%',
           }}
-          viewBox="0 0 1080 1690"
+          viewBox={`0 0 ${DESIGN_WIDTH} ${DESIGN_HEIGHT}`}
           preserveAspectRatio="none"
         >
           <NodeVisualization
@@ -557,8 +605,12 @@ export default function GameCanvas({
             draggingCable={draggingCable}
             selectedCableType={selectedCableType}
             allItems={allItemsMap}
+            cables={cables}
             scale={scale}
             onNodeClick={handleNodeClick}
+            onNodeTouch={handleNodeTouch}
+            nodesHidden={nodesHidden}
+            nodeSize={nodeSize}
           />
         </svg>
 
@@ -578,8 +630,8 @@ export default function GameCanvas({
                 isSelected && !isDragging && !selectedShopItem && !selectedCableType ? 'ring-4 ring-yellow-400 shadow-xl' : ''
               } ${isLocked ? 'cursor-pointer' : isDragging ? 'cursor-grabbing' : 'cursor-grab hover:scale-105'}`}
               style={{
-                left: `${item.x}px`,
-                top: `${item.y}px`,
+                left: `${(item.x / DESIGN_WIDTH) * 100}%`,
+                top: `${(item.y / DESIGN_HEIGHT) * 100}%`,
                 transform: 'translate(-50%, -50%)',
               }}
               onMouseDown={(e) => handleItemMouseDown(e, item.id, isLocked)}
@@ -660,8 +712,8 @@ export default function GameCanvas({
             key={`amp-label-group-${idx}`}
             className="absolute whitespace-nowrap pointer-events-none"
             style={{
-              left: `${group.centerX}px`,
-              top: `${group.centerY - 100}px`,
+              left: `${(group.centerX / DESIGN_WIDTH) * 100}%`,
+              top: `${((group.centerY - 100) / DESIGN_HEIGHT) * 100}%`,
               transform: 'translateX(-50%)',
               zIndex: 35,
             }}
@@ -670,7 +722,7 @@ export default function GameCanvas({
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              {group.ampDraw.toFixed(1)}A{group.count > 1 ? ` Ãƒâ€”${group.count}` : ''}
+              {group.ampDraw.toFixed(1)}A{group.count > 1 ? ` × ${group.count}`: ''}
               {group.specialReq && (
                 <span className="ml-2 text-xs bg-orange-500 px-2 py-1 rounded">
                   {group.specialReq}
@@ -682,7 +734,7 @@ export default function GameCanvas({
 
         {selectedShopItem && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[100]">
-            <div className="bg-black/70 text-white px-8 py-4 rounded-2xl text-xl font-semibold shadow-2xl backdrop-blur-sm border border-white/20">
+            <div className="bg-black/90 text-white px-8 py-4 rounded-2xl text-xl font-semibold shadow-2xl border border-white/20">
               Click to place {ITEM_DEFINITIONS[selectedShopItem]?.displayName}
             </div>
           </div>
@@ -690,7 +742,7 @@ export default function GameCanvas({
 
         {selectedCableType && !selectedShopItem && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[100]">
-            <div className="bg-black/70 text-white px-8 py-4 rounded-2xl text-xl font-semibold shadow-2xl backdrop-blur-sm border border-white/20">
+            <div className="bg-black/90 text-white px-8 py-4 rounded-2xl text-xl font-semibold shadow-2xl border border-white/20">
               Click an outlet to start drawing {selectedCableType === 'edison' ? 'Edison' : 'Flat-Wire'} cable
             </div>
           </div>

@@ -11,14 +11,22 @@ export default function FailedModal({ onKeepTrying, onNextScenario }: FailedModa
   if (isMinimized) {
     // Minimized state - small bar at bottom covering shop and toolbar
     return (
-      <div className="absolute bottom-0 left-0 right-0 z-50 h-[840px] flex flex-col z-65">
-        {/* Transparent spacer to allow viewing the canvas */}
-        <div className="flex-1 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 right-0 z-[200] h-[300px] flex flex-col">
+        {/* Keep Trying Button (covers shop toggle bar - 90px) */}
+        <button
+          onClick={onKeepTrying}
+          className="w-full h-[150px] bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 text-white font-bold text-3xl shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-4 relative z-[201]"
+        >
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Keep Trying
+        </button>
         
-        {/* Back to Results bar */}
+        {/* Back to Results bar (covers bottom toolbar - 150px) */}
         <button
           onClick={() => setIsMinimized(false)}
-          className="w-full h-[150px] bg-gradient-to-r from-red-600 via-red-500 to-red-600 text-white font-bold text-3xl shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-4 z-65"
+          className="w-full h-[150px] bg-gradient-to-r from-red-600 via-red-500 to-red-600 text-white font-bold text-3xl shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-4 relative z-[201]"
         >
           <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" />
@@ -31,9 +39,9 @@ export default function FailedModal({ onKeepTrying, onNextScenario }: FailedModa
 
   // Full modal state
   return (
-    <div className="absolute inset-0 flex items-center justify-center z-65">
+    <div className="absolute inset-0 flex items-center justify-center z-[200]">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/85" />
 
       {/* Modal */}
       <div 
